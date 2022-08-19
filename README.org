@@ -23,5 +23,5 @@ and easier for a new backend to be implemented.
 - [[http://turtleware.eu/posts/McCLIM-backends---Part-2-Stream-Output-Protocol.html][McCLIM backends - Part 2: Stream Output Protocol]]
 - [[http://turtleware.eu/posts/A-tale-of-two-abstractions.html][A tale of two abstractions]] A good overall document mapping the different parts
   of McCLIM to modern graphical windowing systems.
-- [[file:doc/doc/jackdaniel-sdl-backend-guide.org][Some unofficial notes on making a SDL backend by Daniel Kochmański.]] I think I
+- [[file:doc/jackdaniel-sdl-backend-guide.org][Some unofficial notes on making a SDL backend by Daniel Kochmański.]] I think I
   grabbed this from a link on the #clim irc channel.
