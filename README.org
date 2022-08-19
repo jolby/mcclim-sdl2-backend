@@ -1,1 +1,27 @@
-* Introduction - Experimental SDL2 backend for McCLIM
+* Introduction
+An unofficial, experimental SDL2 backend for McCLIM.
+
+- 2022-08-19 A note from Joel Boehland (jolby).
+
+This is an attempt to build on the work of Elias Mårtenson in the sdl-test
+branch of the McCLIM repository and the documentation for creating backend by
+the primary maintainer of McCLIM, Daniel Kochmański (jackdaniel). I am also
+doing this for my own curiosity and education to get a deeper understanding of CLIM
+and how it is implemented.
+
+Daniel Kochmański is apparently also working on an SDL2 backend, and if that
+becomes public, it would be the official SDL2 backend for McCLIM and this
+project would probably be shelved.
+
+* Resources
+Daniel Kochmański has published a number of tutorials and guides explaining the
+different parts and roles of the components in a CLIM backend implementation. In
+addition, he has recently reshaped the codebase to make these roles more clear
+and easier for a new backend to be implemented.
+
+- [[http://turtleware.eu/posts/McCLIM-backends---Part-I-Medium-Output-Protocol.html][McCLIM backends - Part I: Medium Output Protocol]]
+- [[http://turtleware.eu/posts/McCLIM-backends---Part-2-Stream-Output-Protocol.html][McCLIM backends - Part 2: Stream Output Protocol]]
+- [[http://turtleware.eu/posts/A-tale-of-two-abstractions.html][A tale of two abstractions]] A good overall document mapping the different parts
+  of McCLIM to modern graphical windowing systems.
+- [[file:doc/doc/jackdaniel-sdl-backend-guide.org][Some unofficial notes on making a SDL backend by Daniel Kochmański.]] I think I
+  grabbed this from a link on the #clim irc channel.
