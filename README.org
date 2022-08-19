@@ -9,7 +9,7 @@ the primary maintainer of McCLIM, Daniel Kochmański (jackdaniel). I am also
 doing this for my own curiosity and education to get a deeper understanding of CLIM
 and how it is implemented.
 
-Daniel Kochmański is apparently also working on an SDL2 backend, and if that
+Daniel Kochmański is apparently working on an SDL2 backend, and if that
 becomes public, it would be the official SDL2 backend for McCLIM and this
 project would probably be shelved.
 
