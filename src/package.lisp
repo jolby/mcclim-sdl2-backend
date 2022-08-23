@@ -3,7 +3,11 @@
 (in-package :common-lisp-user)
 
 (defpackage :clim-sdl2
-  (:use :clim :clim-lisp :clim-backend)
-  (:import-from #:climi #:maybe-funcall)
+  (:use :clim :clim-lisp :clim-backend :clim-internals)
+  (:import-from #:climi
+                #:if-let
+                #:when-let
+                #:maybe-funcall
+                #:sheet-mirror-geometry)
   (:local-nicknames
    (#:alx #:alexandria)))

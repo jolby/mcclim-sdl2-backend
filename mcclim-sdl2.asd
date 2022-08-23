@@ -7,6 +7,7 @@
                 :pathname "src"
                 :components ((:file "package")
                              (:file "basic" :depends-on ("package"))
+                             (:file "utilities" :depends-on ("package"))
                              (:file "port" :depends-on ("basic"))
                              (:file "mirror" :depends-on ("basic" "port"))
                              ;; (:file "medium" :depends-on ("port" "package"))
