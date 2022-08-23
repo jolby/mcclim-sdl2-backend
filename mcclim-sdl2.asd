@@ -8,7 +8,7 @@
                 :components ((:file "package")
                              (:file "basic" :depends-on ("package"))
                              (:file "port" :depends-on ("basic"))
-                             (:file "mirror" :depends-on ("port"))
+                             (:file "mirror" :depends-on ("basic" "port"))
                              ;; (:file "medium" :depends-on ("port" "package"))
                              ;; (:file "graft" :depends-on ("port" "package"))
                              ;; (:file "frame-manager" :depends-on ("medium" "port" "package"))
