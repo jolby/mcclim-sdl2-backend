@@ -47,6 +47,7 @@
 (defgeneric handle-sdl2-event (event-type event))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
+
   (defun %extract-parameter-pairs (params)
     (log:info "params: ~s " params)
     (let ((parameter-pairs nil))
@@ -57,6 +58,22 @@
         (push (list (first keyword) (second keyword)) parameter-pairs))
       (nreverse parameter-pairs)))
 
+  (defun unpack-event-params (event-var event-type params)
+    (mapcar (lambda (param)
+              (let ((keyword (first param))
+                    (binding (second param))
+                    (ref (or (cdr (assoc event-type sdl2::*event-type-to-accessor*))
+                             :user)))
+                (if (eql keyword :user-data)
+                    `(,binding (get-user-data (c-ref ,event-var sdl2-ffi:sdl-event ,ref :code)))
+                    (if (and (or (eql ref :text) (eql ref :edit)) (eql keyword :text))
+                        `(,binding (c-ref ,event-var sdl2-ffi:sdl-event ,ref ,keyword string))
+                        `(,binding (c-ref ,event-var sdl2-ffi:sdl-event ,ref ,keyword))))))
+            params))
+
+  (defun %plist-keywords (plist)
+    (loop :for (k nil) :on plist :by #'cddr :collect k))
+
   (defun %kw-pair-to-binding-form (k v)
     `(,(intern (format nil "~a" k)) ,v))
 
@@ -64,15 +81,30 @@
     (log:info "params: ~s" params)
     (loop :for (k v) :on params :by #'cddr :while v :collect (%kw-pair-to-binding-form k v)))
 
-  (defun %expand-plist-to-let-bindings-context (plist-arg-names plist-place-name body-forms)
-    (flet ((expand-binding-form (varname)
-             `(,varname (getf ,plist-place-name ,(alexandria:make-keyword varname)))))
-      `(let ,(mapcar #'expand-binding-form plist-arg-names)
-         ,@body-forms)
-      ))
+  (defun %expand-binding-form-from-plist (kw-varname bindings-plist)
+    `(,(intern (format nil "~a" kw-varname)) (getf ,bindings-plist ,kw-varname)))
+
+  (defun %expand-binding-pairs-from-plist (binding-names bindings-plist-sym)
+    (mapcar #'(lambda (kw-varname) (%expand-binding-form-from-plist kw-varname bindings-plist)) (%plist-keywords bindings-plist)))
+
+  (defun %expand-plist-to-let-bindings-context (binding-names bindings-plist-sym  body-forms)
+    ;; (flet ((expand-binding-form (varname)
+    ;;          `(,varname (getf ,bindings-plist ,(alexandria:make-keyword varname)))))
+    ;;   `(let ,(mapcar #'expand-binding-form plist-arg-names)
+    ;;      ,@body-forms)
+    ;;   )
+    `(let ,(mapcar #'%expand-binding-pairs-from-plist binding-names bindings-plist-sym)
+       ,@body-forms))
+
 
   (comment
-    (%expand-plist-to-let-bindings-context '(a z w) 'blah-sym '((format t "w: ~a" w)))
+    (defvar p-names-1 '(window x y w h))
+    (defvar p-names-and-values-1 '(:window (:window-name "win-1") :x 200 :y 400 :w 1080 :y 720))
+    (setf p-names-and-values-1 '(:window (:window-name "win-1") :x 200 :y 400 :w 1080 :y 720))
+    (%expand-binding-form-from-plist :x p-names-and-values-1)
+    (%expand-plist-to-let-bindings-context p-names-and-values-1 '((format t "w: ~a" w)))
+    (%extract-parameter-pairs p-names-and-values-1)
+    (%plist-keywords p-names-and-values-1)
     )
 
   (defun %expand-bindings-context-for-core-event (sdl-event event-type params forms)
@@ -83,14 +115,16 @@
                                           parameter-pairs))
          ,@forms)))
 
-  (defun %expand-bindings-context-for-user-event (sdl-event event-type params body-forms)
+  (defun %expand-bindings-context-for-user-event (sdl-event event-type binding-names body-forms)
     (let ((user-data-sym (alx:make-gensym "user-data-"))
-          (user-data-varnames (alx:make-gensym "user-data-varnames")))
+          ;; (user-data-varnames (alx:make-gensym "user-data-varnames"))
+          )
       `(let* ((,user-data-sym (sdl2::get-user-data (sdl2::c-ref ,sdl-event sdl2-ffi:sdl-event :user :code)))
-              (,user-data-varnames (loop :for (k nil) :on ,user-data-sym :by #'cddr :collect k)))
+              ;; (,user-data-varnames (loop :for (k nil) :on ,user-data-sym :by #'cddr :collect k))
+              )
          ;; (destructuring-bind (&key ,@(%unpack-user-event-params params)) ,user-data-sym
          ;;   ,@forms)
-         ,(%expand-plist-to-let-bindings-context user-data-varnames user-data-sym body-forms)
+         ,(%expand-plist-to-let-bindings-context binding-names user-data-sym body-forms)
          )))
 
   )
