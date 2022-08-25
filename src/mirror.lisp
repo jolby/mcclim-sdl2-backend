@@ -1,10 +1,5 @@
 (in-package #:clim-sdl2)
 
-(defclass sdl2-mirror ()
-  ((window
-    :initarg :window
-    :reader window))
-  (:default-initargs :window (alexandria:required-argument :window)))
 
 (defun sdl2-drawable (object)
   (etypecase object
@@ -24,17 +19,25 @@
   (when-let ((mirror (sheet-direct-mirror sheet)))
     (log:warn "clim-sdl2:port-set-mirror-icon NIY...")))
 
-(defmethod port-set-mirror-geometry
-    ((port sdl2-port) (sheet mirrored-sheet-mixin) region)
-  (when-let ((mirror (sheet-direct-mirror sheet)))
-    (with-bounding-rectangle* (x1 y1 x2 y2 :width w :height h) region
-      (with-bounding-rectangle* (ox1 oy1 :width ow :height oh) (sheet-mirror-geometry sheet)
-        (let ((window (window mirror)))
-          (when (or (/= x1 ox1) (/= y1 oy1))
-            (sdl2:set-window-position window (round-coordinate x1) (round-coordinate y1)))
-          (when (or (/= w ow) (/= h oh))
-            (sdl2:set-window-size window (round-coordinate w) (round-coordinate h)))))
-      (values x1 y1 x2 y2))))
+;; (defmethod port-set-mirror-geometry
+;;     ((port sdl2-port) (sheet mirrored-sheet-mixin) region)
+;;   (when-let ((mirror (sheet-direct-mirror sheet)))
+;;     (with-bounding-rectangle* (x1 y1 x2 y2 :width w :height h) region
+;;       (with-bounding-rectangle* (ox1 oy1 :width ow :height oh) (sheet-mirror-geometry sheet)
+;;         (let ((window (window mirror)))
+;;           (when (or (/= x1 ox1) (/= y1 oy1))
+;;             (sdl2:set-window-position window (round-coordinate x1) (round-coordinate y1)))
+;;           (when (or (/= w ow) (/= h oh))
+;;             (sdl2:set-window-size window (round-coordinate w) (round-coordinate h)))))
+;;       (values x1 y1 x2 y2))))
+
+(defmethod port-set-mirror-geometry (port sheet region)
+  (with-bounding-rectangle* (x y :width w :height h) region
+    (change-window-size (sheet-direct-mirror sheet) x y w h)))
+
+(define-sdl2-request change-window-size (window x y w h)
+  (sdl2-ffi.functions:sdl-set-window-position window x y)
+  (sdl2-ffi.functions:sdl-set-window-size window w h))
 
 (defmethod destroy-mirror ((port sdl2-port) (sheet mirrored-sheet-mixin))
   (when-let ((mirror (sheet-direct-mirror sheet)))

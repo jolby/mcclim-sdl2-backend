@@ -70,15 +70,15 @@
     `(let ,(%expand-binding-pairs-from-plist binding-names bindings-plist-sym)
        ,@body-forms))
 
-  (defun %expand-bindings-context-for-core-event (sdl-event event-type params forms)
+  (defun %expand-lexical-context-for-core-event-handler (sdl-event event-type params body-forms)
     (let ((parameter-pairs (%make-keyword-binding-pairs params)))
       (log:info "extracted parameter pairs: ~s" parameter-pairs)
       `(let (,@(sdl2::unpack-event-params sdl-event
                                           event-type
                                           parameter-pairs))
-         ,@forms)))
+         ,@body-forms)))
 
-  (defun %expand-bindings-context-for-user-event (sdl-event event-type binding-names body-forms)
+  (defun %expand-lexical-context-for-user-event-handler (sdl-event event-type binding-names body-forms)
     (let ((user-data-sym (alx:make-gensym "user-data-")))
       `(let* ((,user-data-sym (sdl2::get-user-data (sdl2::c-ref ,sdl-event sdl2-ffi:sdl-event :user :code))))
          ,(%expand-plist-to-let-bindings-context binding-names user-data-sym body-forms))))
@@ -87,11 +87,11 @@
 
 (defmacro define-sdl2-core-event-handler ((event event-type) (&rest event-params) &body handler-body)
   `(defmethod handle-sdl2-event ((event-type (eql ,event-type)) ,event)
-     ,(%expand-bindings-context-for-core-event event event-type event-params handler-body)))
+     ,(%expand-lexical-context-for-core-event-handler event event-type event-params handler-body)))
 
 (defmacro define-sdl2-user-event-handler ((event event-type) (&rest event-params) &body handler-body)
   `(defmethod handle-sdl2-event ((event-type (eql ,event-type)) ,event)
-     ,(%expand-bindings-context-for-user-event event event-type event-params handler-body)))
+     ,(%expand-lexical-context-for-user-event-handler event event-type event-params handler-body)))
 
 ;;SDL Requests
 (defun push-event (event &rest args)
@@ -99,6 +99,13 @@
       (log:info "would call sdl2:push-user-event: ~s with user-data: ~s ~%" event args)
       (log:info "would call sdl2:push-user-event ~s with no user-data ~%" event)))
 
+ ;; This macro registers an user event type, defines a function ~request-fn-name~
+ ;;  that queues event of that type and a method on ~handle-sdl2-event~ that
+ ;;  implements the body. In single-processing mode handler is called directly.
+
+ ;;  The arglist is similar as with the "system events" but we expand them by a
+ ;;  different mechanism. Request lambda list is (,@args &key synchronize) - the
+ ;;  keyword argument allows to wait for the result returned by the handler.
 (defmacro define-sdl2-request (request-fn-name (&rest event-params) &body handler-body)
   (let ((user-event-type (alx:make-keyword request-fn-name)))
   `(progn
@@ -124,10 +131,11 @@
       (when *quit-stops-the-port-p*
         (signal 'sdl2-exit-port)))
 
-(define-sdl2-core-event-handler (ev :windowevent) (event window-id timestamp data1 data2)
-  (log:info "ev: ~a, w-id: ~a ts: ~a" event window-id timestamp)
-  (alx:when-let ((sheet (get-mirror-sheet *sdl2-port* window-id)))
-    (let ((event-key (autowrap:enum-key '(:enum (windowevent.event)) event)))
-      (handle-sdl2-window-event event-key sheet timestamp data1 data2)))
-  )
+(comment
+  (define-sdl2-core-event-handler (ev :windowevent) (event window-id timestamp data1 data2)
+    (log:info "ev: ~a, w-id: ~a ts: ~a" event window-id timestamp)
+    (alx:when-let ((sheet (get-mirror-sheet *sdl2-port* window-id)))
+      (let ((event-key (autowrap:enum-key '(:enum (windowevent.event)) event)))
+        (handle-sdl2-window-event event-key sheet timestamp data1 data2))))
 
+  )

@@ -1,19 +1,6 @@
 (in-package :clim-sdl2)
 
-
-(defclass sdl2-pointer (standard-pointer)
-  ((cursor :accessor pointer-cursor :initform :upper-left)
-   (x :initform 0)
-   (y :initform 0)))
-
-(defclass sdl2-port (basic-port)
-  ((id)
-   (pointer            :accessor port-pointer :initform (make-instance 'sdl2-pointer))
-   (window             :initform nil :accessor sdl-port-window)
-   (sheet-to-window-id :initform (make-hash-table :test 'eql)
-                       :reader sdl-port/sheet-to-window-id)
-   (window-id-to-sheet :initform (make-hash-table :test 'eql)
-                       :reader sdl-port/window-id-to-sheet)))
+(defvar *sdl2-port* nil)
 
 (defun parse-sdl2-server-path (path)
   path)
@@ -29,7 +16,7 @@
   (log:info "SDL2 Port initialize-instance: ~a ~%" port)
   (setf (slot-value port 'id) (gensym "SDL2-PORT-"))
   ;; FIXME: it seems bizarre for this to be necessary
-  (push (make-instance 'sdl-frame-manager :port port)
+  (push (make-instance 'sdl2-frame-manager :port port)
         (slot-value port 'climi::frame-managers)))
 
 (defmethod print-object ((object sdl2-port) stream)
@@ -62,14 +49,21 @@
                    (return-from process-next-event
                      (values result reason))))))))
 
+(defvar *max-loops* 10)
+(defvar *completed-loops* 0)
+
 (defun %loop-port (port)
   (%init-sdl2)
+  (setf *completed-loops* 0)
   (unwind-protect
        (handler-bind ((sdl2-exit-port
                         (lambda (c)
-                          (declare (ignore c))
+                          (format t "~a ~%" c)
                           (return-from %loop-port))))
          (loop
            (with-simple-restart (ignore "Ignore error and continue.")
-             (process-next-event port))))
+             (when (> *completed-loops* *max-loops*)
+               (signal 'sdl2-exit-port :report (format nil "completed max: ~a loops ~%" *completed-loops*)))
+             (process-next-event port)
+             (incf *completed-loops*))))
     (%quit-sdl2)))
