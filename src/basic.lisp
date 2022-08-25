@@ -74,6 +74,9 @@
   (defun %plist-keywords (plist)
     (loop :for (k nil) :on plist :by #'cddr :collect k))
 
+  (defun %make-keyword-binding-pairs (binding-names)
+    (loop :for bn :in binding-names collect (list (alx:make-keyword bn) bn)))
+
   (defun %kw-pair-to-binding-form (k v)
     `(,(intern (format nil "~a" k)) ,v))
 
@@ -81,19 +84,14 @@
     (log:info "params: ~s" params)
     (loop :for (k v) :on params :by #'cddr :while v :collect (%kw-pair-to-binding-form k v)))
 
-  (defun %expand-binding-form-from-plist (kw-varname bindings-plist)
-    `(,(intern (format nil "~a" kw-varname)) (getf ,bindings-plist ,kw-varname)))
+  (defun %expand-binding-form-from-plist (varname bindings-plist-sym)
+    `(,varname (getf ,bindings-plist-sym ,(alx:make-keyword varname))))
 
   (defun %expand-binding-pairs-from-plist (binding-names bindings-plist-sym)
-    (mapcar #'(lambda (kw-varname) (%expand-binding-form-from-plist kw-varname bindings-plist)) (%plist-keywords bindings-plist)))
+    (mapcar #'(lambda (varname) (%expand-binding-form-from-plist varname bindings-plist-sym)) binding-names))
 
   (defun %expand-plist-to-let-bindings-context (binding-names bindings-plist-sym  body-forms)
-    ;; (flet ((expand-binding-form (varname)
-    ;;          `(,varname (getf ,bindings-plist ,(alexandria:make-keyword varname)))))
-    ;;   `(let ,(mapcar #'expand-binding-form plist-arg-names)
-    ;;      ,@body-forms)
-    ;;   )
-    `(let ,(mapcar #'%expand-binding-pairs-from-plist binding-names bindings-plist-sym)
+    `(let ,(%expand-binding-pairs-from-plist binding-names bindings-plist-sym)
        ,@body-forms))
 
 
@@ -101,14 +99,15 @@
     (defvar p-names-1 '(window x y w h))
     (defvar p-names-and-values-1 '(:window (:window-name "win-1") :x 200 :y 400 :w 1080 :y 720))
     (setf p-names-and-values-1 '(:window (:window-name "win-1") :x 200 :y 400 :w 1080 :y 720))
-    (%expand-binding-form-from-plist :x p-names-and-values-1)
-    (%expand-plist-to-let-bindings-context p-names-and-values-1 '((format t "w: ~a" w)))
+    (%expand-binding-form-from-plist x (alx:make-gensym "bindings-plist-"))
+    (%expand-plist-to-let-bindings-context p-names-1 (alx:make-gensym "bindings-plist-") '((format t "w: ~a" w)))
     (%extract-parameter-pairs p-names-and-values-1)
     (%plist-keywords p-names-and-values-1)
     )
 
   (defun %expand-bindings-context-for-core-event (sdl-event event-type params forms)
-    (let ((parameter-pairs (%extract-parameter-pairs params)))
+    (let (;(parameter-pairs (%extract-parameter-pairs params))
+          (parameter-pairs (%make-keyword-binding-pairs params)))
       (log:info "extracted parameter pairs: ~s" parameter-pairs)
       `(let (,@(sdl2::unpack-event-params sdl-event
                                           event-type
@@ -116,14 +115,8 @@
          ,@forms)))
 
   (defun %expand-bindings-context-for-user-event (sdl-event event-type binding-names body-forms)
-    (let ((user-data-sym (alx:make-gensym "user-data-"))
-          ;; (user-data-varnames (alx:make-gensym "user-data-varnames"))
-          )
-      `(let* ((,user-data-sym (sdl2::get-user-data (sdl2::c-ref ,sdl-event sdl2-ffi:sdl-event :user :code)))
-              ;; (,user-data-varnames (loop :for (k nil) :on ,user-data-sym :by #'cddr :collect k))
-              )
-         ;; (destructuring-bind (&key ,@(%unpack-user-event-params params)) ,user-data-sym
-         ;;   ,@forms)
+    (let ((user-data-sym (alx:make-gensym "user-data-")))
+      `(let* ((,user-data-sym (sdl2::get-user-data (sdl2::c-ref ,sdl-event sdl2-ffi:sdl-event :user :code))))
          ,(%expand-plist-to-let-bindings-context binding-names user-data-sym body-forms)
          )))
 
@@ -132,14 +125,17 @@
 (comment
 
   (%kw-pair-to-binding-form :A 24)
-  (%expand-bindings-context-for-user-event '(:user-event) :sdl-exit-port '(:foo 1 :bar 2) '((format t "Got foo: ~a ~%" foo)))
+  (%expand-bindings-context-for-core-event 'user-event :windowevennt
+                                           '(event window-id timestamp data1 data2) '((format t "Got window: ~a ~%" window)))
+
+  (%expand-bindings-context-for-user-event 'user-event :sdl-exit-port '(foo bar) '((format t "Got foo: ~a ~%" foo)))
 
   (%extract-parameter-pairs '(:foo 22 :bar 24))
   (%unpack-user-event-params '(:foo 22 :bar 24))
 
   )
 
-(defmacro define-sdl2-event-handler ((event event-type) (&rest event-params) &body handler-body)
+(defmacro define-sdl2-core-event-handler ((event event-type) (&rest event-params) &body handler-body)
   `(defmethod handle-sdl2-event ((event-type (eql ,event-type)) ,event)
      ,(%expand-bindings-context-for-core-event event event-type event-params handler-body)))
 
@@ -154,8 +150,9 @@
   `(progn
      (sdl2:register-user-event-type ,user-event-type)
 
-     (defun ,request-fn-name (&rest event-params &key (synchronize nil synchronize-p) &allow-other-keys)
-       (remf event-params :synchronize)
+     ;; (defun ,request-fn-name (&rest event-params &key (synchronize nil synchronize-p) &allow-other-keys)
+     (defun ,request-fn-name (,@event-params &key (synchronize nil synchronize-p))
+       ;; (remf event-params :synchronize)
        (cond ((null synchronize) (apply #'push-event ,user-event-type event-params))
              ((numberp synchronize) (apply #'push-event ,user-event-type event-params))
              (t (apply #'push-event ,user-event-type event-params))))
@@ -165,22 +162,22 @@
     )
     ))
 (comment
-(define-sdl2-request change-window-size (:window window :x x :y y :w w :h h)
+(define-sdl2-request change-window-size (window x y w h)
     (sdl2-ffi.functions:sdl-set-window-position window x y)
     (sdl2-ffi.functions:sdl-set-window-size window w h))
   )
 
-(define-sdl2-event-handler (event :quit) ()
+(define-sdl2-core-event-handler (event :quit) ()
       (log:info "Quit requested... ~a"
                 (if *quit-stops-the-port-p* "signaling" "ignoring"))
       (when *quit-stops-the-port-p*
         (signal 'sdl2-exit-port)))
 
-(define-sdl2-event-handler (ev :windowevent) (:event event :window-id window-id :timestamp timestamp :data1 data1 :data2 data2)
-  ;; (alexandria:when-let ((sheet (get-mirror-sheet *sdl2-port* window-id)))
-  ;;   (let ((event-key (autowrap:enum-key '(:enum (windowevent.event)) event)))
-  ;;     (handle-sdl2-window-event event-key sheet timestamp data1 data2)))
+(define-sdl2-core-event-handler (ev :windowevent) (event window-id timestamp data1 data2)
   (log:info "ev: ~a, w-id: ~a ts: ~a" event window-id timestamp)
+  (alx:when-let ((sheet (get-mirror-sheet *sdl2-port* window-id)))
+    (let ((event-key (autowrap:enum-key '(:enum (windowevent.event)) event)))
+      (handle-sdl2-window-event event-key sheet timestamp data1 data2)))
   )
 
 ;;SDL Requests
