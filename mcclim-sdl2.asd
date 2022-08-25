@@ -25,3 +25,7 @@
   ;;                            (:file "frame-manager" :depends-on ("medium" "port" "package")))))
 
   )
+
+#+nil (asdf:load-system :mcclim-sdl2)
+
+#+nil (in-package :mcclim-sdl2)
