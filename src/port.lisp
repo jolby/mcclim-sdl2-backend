@@ -13,15 +13,15 @@
 
 (defmethod initialize-instance :after ((port sdl2-port) &rest initargs)
   (declare (ignore initargs))
-  (log:info "SDL2 Port initialize-instance: ~a ~%" port)
-  (setf (slot-value port 'id) (gensym "SDL2-PORT-"))
+  (%sdl-port-id (gensym "SDL2-PORT-") port)
   ;; FIXME: it seems bizarre for this to be necessary
   (push (make-instance 'sdl2-frame-manager :port port)
-        (slot-value port 'climi::frame-managers)))
+        (slot-value port 'climi::frame-managers))
+    (log:info "SDL2 Port initialize-instance: ~a ~%" port))
 
 (defmethod print-object ((object sdl2-port) stream)
   (print-unreadable-object (object stream :identity t :type t)
-    (format stream "~S ~S" :id (slot-value object 'id))))
+    (format stream "~S ~S" :id (sdl-port-id object))))
 
 ;; This implements semantics of process-next-event but without distributing
 ;; the event - there is no need for the port argument.
@@ -51,19 +51,35 @@
 
 (defvar *max-loops* 10)
 (defvar *completed-loops* 0)
+(defvar *sdl-loop-timeout* 500)
 
-(defun %loop-port (port)
-  (%init-sdl2)
-  (setf *completed-loops* 0)
+
+(defun %port-loop-step (port)
   (unwind-protect
-       (handler-bind ((sdl2-exit-port
-                        (lambda (c)
-                          (format t "~a ~%" c)
-                          (return-from %loop-port))))
-         (loop
-           (with-simple-restart (ignore "Ignore error and continue.")
-             (when (> *completed-loops* *max-loops*)
-               (signal 'sdl2-exit-port :report (format nil "completed max: ~a loops ~%" *completed-loops*)))
-             (process-next-event port)
-             (incf *completed-loops*))))
-    (%quit-sdl2)))
+       (progn
+         (process-next-event port :timeout *sdl-loop-timeout*))
+    (incf *completed-loops*)))
+
+(defun %port-loop (port)
+  (%init-sdl2)
+
+  (tmt:with-body-in-main-thread ()
+  ;; (sdl2:in-main-thread ()
+    (unwind-protect
+         (handler-bind ((error
+                          (lambda (condition)
+                            (trivial-backtrace:print-backtrace condition)
+                            (return-from %port-loop)))
+                        (sdl2-exit-port
+                          (lambda (c)
+                            (format t "sdl2-exit-port handler: ~a ~%" c)
+                            (return-from %port-loop))))
+
+           (setf *completed-loops* 0)
+           (loop
+             (with-simple-restart (ignore "Ignore error and continue.")
+               (when (> *completed-loops* *max-loops*)
+                 (signal 'sdl2-exit-port :report (format nil "completed max: ~a loops ~%" *completed-loops*)))
+               (%port-loop-step port)
+               )))
+      (%quit-sdl2))))

@@ -22,6 +22,7 @@
 (defun %init-sdl2 ()
   (unless *initialized-p*
     (sdl2:init* '(:everything))
+    ;; (sdl2:init :everything)
     (setf *initialized-p* t)
     (clim-sys:condition-notify *initialized-cv*)
     (log:info "Hello!")))
@@ -30,7 +31,9 @@
   (when *initialized-p*
     (log:info "Good bye.")
     (setf *initialized-p* nil)
-    (sdl2:quit*)))
+    (sdl2:quit*)
+    ;; (sdl2:quit)
+    ))
 
 (defun %read-sdl2 (event timeout)
   (let ((rc (if (null timeout)
@@ -44,6 +47,9 @@
 ;; function that reads events calls ~handle-sdl2-event~ to dispatch on them.
 ;; Methods for this function are defined with a macro ~define-sdl2-handler~.
 (defgeneric handle-sdl2-event (event-type event))
+
+(defmethod handle-sdl2-event ((any-event-type t) (any-event t))
+  (log:warn "Unknown event type: ~a" any-event-type))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
 

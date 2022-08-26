@@ -11,7 +11,7 @@
    (y :initform 0)))
 
 (defclass sdl2-port (basic-port)
-  ((id)
+  ((id                 :reader sdl-port-id :writer %sdl-port-id)
    (pointer            :accessor port-pointer :initform (make-instance 'sdl2-pointer))
    (window             :initform nil :accessor sdl-port-window)
    (sheet-to-window-id :initform (make-hash-table :test 'eql)
@@ -28,7 +28,7 @@
 (defclass sdl2-graft (graft)
   ())
 
-(defclass sdl-renderer-sheet (mirrored-sheet-mixin)
+(defclass sdl2-renderer-sheet (mirrored-sheet-mixin)
   ((renderer      :initform nil
                   :accessor sdl-renderer-sheet/renderer)
    (texture       :initform nil
