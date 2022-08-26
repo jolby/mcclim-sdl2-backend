@@ -61,10 +61,6 @@
     (incf *completed-loops*)))
 
 (defun %port-loop (port)
-  (%init-sdl2)
-
-  (tmt:with-body-in-main-thread ()
-  ;; (sdl2:in-main-thread ()
     (unwind-protect
          (handler-bind ((error
                           (lambda (condition)
@@ -82,4 +78,11 @@
                  (signal 'sdl2-exit-port :report (format nil "completed max: ~a loops ~%" *completed-loops*)))
                (%port-loop-step port)
                )))
-      (%quit-sdl2))))
+      (%quit-sdl2)))
+
+(defun run-port-loop-in-main-thread (port)
+
+  (%init-sdl2)
+  ;; XXX Figure out which one to use
+  ;; (sdl2:in-main-thread ()
+  (tmt:call-in-main-thread (lambda () (%port-loop port))))
