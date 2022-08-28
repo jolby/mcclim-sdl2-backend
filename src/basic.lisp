@@ -41,6 +41,29 @@
                 (sdl2-ffi.functions:sdl-wait-event-timeout event timeout))))
     (= rc 1)))
 
+(defvar *future-result-keyword* :clim-sdl2.future-result)
+(defvar *last-future-result* nil)
+
+(defun %get-user-event-id (sdl2-event)
+  (sdl2::c-ref sdl2-event sdl2-ffi:sdl-event :user :code))
+
+(defun %get-user-data-for-event (sdl2-event)
+  (sdl2::get-user-data (%get-user-event-id sdl2-event)))
+
+(defun %set-user-data-for-event (sdl2-event user-data)
+  (if (zerop (%get-user-event-id sdl2-event))
+      (let ((new-event-id (sdl2::add-user-data user-data)))
+        (setf
+         (sdl2::c-ref sdl2-event sdl2-ffi:sdl-event :user :code)
+         new-event-id))
+      ;; This isn't really supported by the sdl2 user data api but might be useful
+      ;; for testing user events
+      (setf (gethash (%get-user-event-id sdl2-event) sdl2::*user-events*) user-data)))
+
+(defun %get-future-result-for-event (sdl2-event)
+  (if-let ((user-data (%get-user-data-for-event sdl2-event)))
+    (getf user-data *future-result-keyword*)))
+
 ;;;; Event handling
 
 ;; The function ~handle-sdl2-event~ is used to implement event handling. When
@@ -102,8 +125,39 @@
 ;;SDL Requests
 (defun push-event (event &rest args)
   (if args
-      (log:info "would call sdl2:push-user-event: ~s with user-data: ~s ~%" event args)
-      (log:info "would call sdl2:push-user-event ~s with no user-data ~%" event)))
+      (log:info "sdl2:push-user-event: ~s with user-data: ~s ~%" event args)
+      (log:info "sdl2:push-user-event ~s with no user-data ~%" event))
+      (sdl2:push-user-event event args))
+
+(defun push-event-sync-wait (event &rest args)
+  (log:info "sdl2:push-user-event-sync-wait: ~s with user-data: ~s ~%" event args)
+  (let* ((fr (%make-future-result))
+         (lock (fres-lock fr))
+         (cv (fres-completion-cv fr))
+         (cv-return-code nil))
+    (log:info "run-sdl-request started on thread: ~a" (bt:current-thread))
+    (setf (getf args *future-result-keyword*) fr)
+    (sdl2:push-user-event event args)
+    (bt:with-lock-held (lock)
+      (setf cv-return-code (bt:condition-wait cv lock)))
+    (setf *last-future-result* fr)
+    (log:info "cv-return-code: ~a FUTURE RESULT: ~a ~%" cv-return-code fr)
+    (fres-value fr)))
+
+(defun push-event-sync-wait-with-timeout (event &rest args)
+  (log:info "sdl2:push-user-event-sync-wait-with-timeout: ~s with user-data: ~s ~%" event args)
+  (let* ((fr (%make-future-result))
+         (lock (fres-lock fr))
+         (cv (fres-completion-cv fr))
+         (cv-return-code nil))
+    (log:info "run-sdl-request started on thread: ~a" (bt:current-thread))
+    (setf (getf args *future-result-keyword*) fr)
+    (sdl2:push-user-event event args)
+    (bt:with-lock-held (lock)
+      (setf cv-return-code (bt:condition-wait cv lock :timeout (getf args :synchronize))))
+    (setf *last-future-result* fr)
+    (log:info "cv-return-code: ~a FUTURE RESULT: ~a ~%" cv-return-code fr)
+    (fres-value fr)))
 
  ;; This macro registers an user event type, defines a function ~request-fn-name~
  ;;  that queues event of that type and a method on ~handle-sdl2-event~ that
@@ -118,17 +172,19 @@
      (sdl2:register-user-event-type ,user-event-type)
 
      (defun ,request-fn-name (,@event-params &key (synchronize nil synchronize-p))
-       (cond ((null synchronize) (apply #'push-event ,user-event-type event-params))
-             ((numberp synchronize) (apply #'push-event ,user-event-type event-params))
-             (t (apply #'push-event ,user-event-type event-params))))
+       (cond ((null synchronize) (push-event ,user-event-type ,@event-params))
+             ((numberp synchronize) (push-event-sync-wait-with-timeout ,user-event-type ,@event-params :timeout synchronize))
+             (t (push-event-sync-wait ,user-event-type ,@event-params))))
 
      (define-sdl2-user-event-handler (event ,user-event-type) (,@event-params)
        ,@handler-body))))
 
 (comment
+  (apply #'push-event (list :change-window-size :win-1 400 200 640 480))
 (define-sdl2-request change-window-size (window x y w h)
     (sdl2-ffi.functions:sdl-set-window-position window x y)
     (sdl2-ffi.functions:sdl-set-window-size window w h))
+  (change-window-size '(:win "WIN-1") 400 200 640 480)
   )
 
 (define-sdl2-core-event-handler (event :quit) ()
@@ -145,3 +201,14 @@
         (handle-sdl2-window-event event-key sheet timestamp data1 data2))))
 
   )
+
+;; This function should be called with synchronization as a timeout - it will
+;; return :pong only when the event is processed (so the loop is processing).
+(define-sdl2-request sdl2-ping ()
+  :pong)
+
+;; This function is for testing.
+;; WARNING this will freeze the event loop for requested amount of time.
+(define-sdl2-request sdl2-delay (ms)
+  (sdl2:delay ms)
+  :done)

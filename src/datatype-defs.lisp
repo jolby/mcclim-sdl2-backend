@@ -3,6 +3,16 @@
 ;; Conditions
 (define-condition sdl2-exit-port (condition) ())
 
+;; Structs
+(defstruct (future-result
+            (:constructor %make-future-result)
+            (:conc-name fres-))
+  (state :pending :type symbol)
+  (deadline 0 :type (unsigned-byte 64) :read-only t)
+  (completion-cv (bt:make-condition-variable :name "future-result"))
+  (lock (bt:make-lock "future-result-lock"))
+  (value-provided? nil)
+  (value nil))
 
 ;; Classes
 (defclass sdl2-pointer (standard-pointer)
