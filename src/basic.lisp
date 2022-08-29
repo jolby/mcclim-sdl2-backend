@@ -75,19 +75,17 @@
   (log:warn "Unknown event type: ~a" any-event-type))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
+  (defun interleave (&rest lsts)
+    (apply 'mapcan 'list lsts))
 
   (defun %plist-keywords (plist)
     (loop :for (k nil) :on plist :by #'cddr :collect k))
 
+  (defun %make-plist-from-binding-names (binding-names)
+    (interleave (mapcar #'(lambda (x) (alx:make-keyword x)) binding-names) binding-names))
+
   (defun %make-keyword-binding-pairs (binding-names)
     (loop :for bn :in binding-names collect (list (alx:make-keyword bn) bn)))
-
-  (defun %kw-pair-to-binding-form (k v)
-    `(,(intern (format nil "~a" k)) ,v))
-
-  (defun %unpack-user-event-params (params)
-    (log:info "params: ~s" params)
-    (loop :for (k v) :on params :by #'cddr :while v :collect (%kw-pair-to-binding-form k v)))
 
   (defun %expand-binding-form-from-plist (varname bindings-plist-sym)
     `(,varname (getf ,bindings-plist-sym ,(alx:make-keyword varname))))
@@ -123,58 +121,49 @@
      ,(%expand-lexical-context-for-user-event-handler event event-type event-params handler-body)))
 
 ;;SDL Requests
-(defun push-event (event &rest args)
-  (if args
-      (log:info "sdl2:push-user-event: ~s with user-data: ~s ~%" event args)
-      (log:info "sdl2:push-user-event ~s with no user-data ~%" event))
-      (sdl2:push-user-event event args))
+(defun push-event (event args-plist)
+  ;; (if args-plist
+  ;;     (log:info "sdl2:push-user-event: ~s with user-data: ~s ~%" event args-plist)
+  ;;     (log:info "sdl2:push-user-event ~s with no user-data ~%" event))
+      (sdl2:push-user-event event args-plist))
 
-(defun push-event-sync-wait (event &rest args)
-  (log:info "sdl2:push-user-event-sync-wait: ~s with user-data: ~s ~%" event args)
+(defun push-event-sync-wait (event args-plist &key timeout)
+  ;; (log:info "sdl2:push-user-event-sync-wait-with-timeout: ~s with user-data: ~s ~%" event args-plist)
   (let* ((fr (%make-future-result))
          (lock (fres-lock fr))
          (cv (fres-completion-cv fr))
          (cv-return-code nil))
-    (log:info "run-sdl-request started on thread: ~a" (bt:current-thread))
-    (setf (getf args *future-result-keyword*) fr)
-    (sdl2:push-user-event event args)
+    ;; (log:info "run-sdl-request started on thread: ~a" (bt:current-thread))
+    (setf (getf args-plist *future-result-keyword*) fr)
+    (sdl2:push-user-event event args-plist)
     (bt:with-lock-held (lock)
-      (setf cv-return-code (bt:condition-wait cv lock)))
+      (setf cv-return-code (bt:condition-wait cv lock :timeout timeout)))
     (setf *last-future-result* fr)
-    (log:info "cv-return-code: ~a FUTURE RESULT: ~a ~%" cv-return-code fr)
+    ;; (log:info "cv-return-code: ~a FUTURE RESULT: ~a ~%" cv-return-code fr)
     (fres-value fr)))
 
-(defun push-event-sync-wait-with-timeout (event &rest args)
-  (log:info "sdl2:push-user-event-sync-wait-with-timeout: ~s with user-data: ~s ~%" event args)
-  (let* ((fr (%make-future-result))
-         (lock (fres-lock fr))
-         (cv (fres-completion-cv fr))
-         (cv-return-code nil))
-    (log:info "run-sdl-request started on thread: ~a" (bt:current-thread))
-    (setf (getf args *future-result-keyword*) fr)
-    (sdl2:push-user-event event args)
-    (bt:with-lock-held (lock)
-      (setf cv-return-code (bt:condition-wait cv lock :timeout (getf args :synchronize))))
-    (setf *last-future-result* fr)
-    (log:info "cv-return-code: ~a FUTURE RESULT: ~a ~%" cv-return-code fr)
-    (fres-value fr)))
+;; This macro registers an user event type, defines a function
+;; ~request-fn-name~ that queues event of that type and a method on
+;; ~handle-sdl2-event~ that implements the body. In single-processing mode
+;; handler is called directly.
 
- ;; This macro registers an user event type, defines a function ~request-fn-name~
- ;;  that queues event of that type and a method on ~handle-sdl2-event~ that
- ;;  implements the body. In single-processing mode handler is called directly.
-
- ;;  The arglist is similar as with the "system events" but we expand them by a
- ;;  different mechanism. Request lambda list is (,@args &key synchronize) - the
- ;;  keyword argument allows to wait for the result returned by the handler.
+;; The arglist is similar as with the "system events" but we expand them by a
+;; different mechanism. Request lambda list is (,@args &key synchronize). The
+;; arguments provided to that function are bundled into a plist that is attached
+;; to the sdl event as user-data. The keyword argument allows to wait for the
+;; result returned by the handler. On the handler side, the arguments bound to
+;; the plist are expanded into let bindings that surround the handler body.
 (defmacro define-sdl2-request (request-fn-name (&rest event-params) &body handler-body)
   (let ((user-event-type (alx:make-keyword request-fn-name)))
   `(progn
      (sdl2:register-user-event-type ,user-event-type)
 
      (defun ,request-fn-name (,@event-params &key (synchronize nil synchronize-p))
-       (cond ((null synchronize) (push-event ,user-event-type ,@event-params))
-             ((numberp synchronize) (push-event-sync-wait-with-timeout ,user-event-type ,@event-params :timeout synchronize))
-             (t (push-event-sync-wait ,user-event-type ,@event-params))))
+       (let ((event-params-plist (list ,@(%make-plist-from-binding-names event-params))))
+         (cond ((null synchronize) (push-event ,user-event-type event-params-plist))
+               ((numberp synchronize) (push-event-sync-wait ,user-event-type event-params-plist
+                                                            :timeout synchronize))
+               (t (push-event-sync-wait ,user-event-type event-params-plist :timeout nil)))))
 
      (define-sdl2-user-event-handler (event ,user-event-type) (,@event-params)
        ,@handler-body))))
@@ -212,3 +201,4 @@
 (define-sdl2-request sdl2-delay (ms)
   (sdl2:delay ms)
   :done)
+
