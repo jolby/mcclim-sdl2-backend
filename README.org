@@ -23,5 +23,7 @@ and easier for a new backend to be implemented.
 - [[http://turtleware.eu/posts/McCLIM-backends---Part-2-Stream-Output-Protocol.html][McCLIM backends - Part 2: Stream Output Protocol]]
 - [[http://turtleware.eu/posts/A-tale-of-two-abstractions.html][A tale of two abstractions]] A good overall document mapping the different parts
   of McCLIM to modern graphical windowing systems.
+- [[https://mcclim.common-lisp.dev/posts/Sheets-as-ideal-forms.html][Sheets as Ideal Forms]] Great document explaining the linkage between physical
+  devices and grafts, mediums and ports.
 - [[file:doc/jackdaniel-sdl-backend-guide.org][Some unofficial notes on making a SDL backend by Daniel Kochmański.]] I think I
   grabbed this from a link on the #clim irc channel.
