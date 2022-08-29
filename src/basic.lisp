@@ -122,24 +122,22 @@
 
 ;;SDL Requests
 (defun push-event (event args-plist)
-  ;; (if args-plist
-  ;;     (log:info "sdl2:push-user-event: ~s with user-data: ~s ~%" event args-plist)
-  ;;     (log:info "sdl2:push-user-event ~s with no user-data ~%" event))
-      (sdl2:push-user-event event args-plist))
+  (sdl2:push-user-event event args-plist))
 
 (defun push-event-sync-wait (event args-plist &key timeout)
-  ;; (log:info "sdl2:push-user-event-sync-wait-with-timeout: ~s with user-data: ~s ~%" event args-plist)
   (let* ((fr (%make-future-result))
          (lock (fres-lock fr))
          (cv (fres-completion-cv fr))
-         (cv-return-code nil))
-    ;; (log:info "run-sdl-request started on thread: ~a" (bt:current-thread))
+         (cv-return-code nil)
+         ;;Convert our timeout expressed in milliseconds to
+         ;;seconds as expected by bt:condition-wait
+         (timeout (if timeout (/ timeout 1000))))
     (setf (getf args-plist *future-result-keyword*) fr)
     (sdl2:push-user-event event args-plist)
     (bt:with-lock-held (lock)
       (setf cv-return-code (bt:condition-wait cv lock :timeout timeout)))
-    (setf *last-future-result* fr)
-    ;; (log:info "cv-return-code: ~a FUTURE RESULT: ~a ~%" cv-return-code fr)
+    ;;XXX debug
+    ;; (setf *last-future-result* fr)
     (fres-value fr)))
 
 ;; This macro registers an user event type, defines a function
@@ -168,28 +166,11 @@
      (define-sdl2-user-event-handler (event ,user-event-type) (,@event-params)
        ,@handler-body))))
 
-(comment
-  (apply #'push-event (list :change-window-size :win-1 400 200 640 480))
-(define-sdl2-request change-window-size (window x y w h)
-    (sdl2-ffi.functions:sdl-set-window-position window x y)
-    (sdl2-ffi.functions:sdl-set-window-size window w h))
-  (change-window-size '(:win "WIN-1") 400 200 640 480)
-  )
-
 (define-sdl2-core-event-handler (event :quit) ()
       (log:info "Quit requested... ~a"
                 (if *quit-stops-the-port-p* "signaling" "ignoring"))
       (when *quit-stops-the-port-p*
         (signal 'sdl2-exit-port)))
-
-(comment
-  (define-sdl2-core-event-handler (ev :windowevent) (event window-id timestamp data1 data2)
-    (log:info "ev: ~a, w-id: ~a ts: ~a" event window-id timestamp)
-    (alx:when-let ((sheet (get-mirror-sheet *sdl2-port* window-id)))
-      (let ((event-key (autowrap:enum-key '(:enum (windowevent.event)) event)))
-        (handle-sdl2-window-event event-key sheet timestamp data1 data2))))
-
-  )
 
 ;; This function should be called with synchronization as a timeout - it will
 ;; return :pong only when the event is processed (so the loop is processing).
