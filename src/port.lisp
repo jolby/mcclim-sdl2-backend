@@ -61,6 +61,7 @@
 (defvar *max-loops* 500)
 (defvar *completed-loops* 0)
 (defvar *keep-running* nil)
+(defvar *is-running* nil)
 (defvar *sdl-loop-timeout* 500)
 
 
@@ -82,6 +83,7 @@
                             (return-from %port-loop))))
 
            (setf *keep-running* t)
+           (setf *is-running* t)
            (setf *completed-loops* 0)
            (loop
              (with-simple-restart (ignore "Ignore error and continue.")
@@ -90,7 +92,8 @@
                (unless *keep-running*
                  (signal 'sdl2-exit-port :report (format nil "keep-running nil. completed ~a loops ~%" *completed-loops*)))
                (%port-loop-step port))))
-      (%quit-sdl2)))
+      (%quit-sdl2)
+      (setf *is-running* nil)))
 
 (defun run-port-loop-in-main-thread (port)
   (%init-sdl2)

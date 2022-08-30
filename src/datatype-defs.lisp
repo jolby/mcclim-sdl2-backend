@@ -51,8 +51,6 @@
 (defclass sdl2-top-level-sheet-pane (sdl2-renderer-sheet climi::top-level-sheet-pane)
   ())
 
-(defmethod sheet-direct-mirror ((sheet sdl2-top-level-sheet-pane))
-  ())
 
 (defclass sdl2-frame-manager (frame-manager)
   ())

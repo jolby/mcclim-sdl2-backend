@@ -67,3 +67,6 @@
   (when-let ((mirror (window (sheet-direct-mirror sheet))))
     (let ((window (window mirror)))
       (sdl2:minimize-window window))))
+
+(defmethod sheet-direct-mirror ((sheet sdl2-top-level-sheet-pane))
+  ())

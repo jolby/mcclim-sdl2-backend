@@ -14,11 +14,6 @@
 (defvar *initialized-cv* (clim-sys:make-condition-variable))
 (defvar *initialized-lock* (clim-sys:make-lock "SDL2 init cv lock"))
 
-;; User-requested exit - this event is usually signaled when the last window
-;; is closed (in addition to windowevent/close), but may be also prompted by
-;; the window manager or an interrupt. The application may ignore it.
-(defvar *quit-stops-the-port-p* nil)
-
 (defun %init-sdl2 ()
   (unless *initialized-p*
     (sdl2:init* '(:everything))
@@ -166,11 +161,25 @@
      (define-sdl2-user-event-handler (event ,user-event-type) (,@event-params)
        ,@handler-body))))
 
+
+;;;; =========================================================================
+;;;;
+;;;; Basic Concrete Handlers/Requests to test event loop functionality
+;;;;
+
+;; User-requested exit - this event is usually signaled when the last window
+;; is closed (in addition to windowevent/close), but may be also prompted by
+;; the window manager or an interrupt. The application may ignore it.
+(defvar *quit-stops-the-port-p* nil)
+
 (define-sdl2-core-event-handler (event :quit) ()
       (log:info "Quit requested... ~a"
                 (if *quit-stops-the-port-p* "signaling" "ignoring"))
       (when *quit-stops-the-port-p*
         (signal 'sdl2-exit-port)))
+
+(define-sdl2-request sdl2-exit-port ()
+  (signal 'sdl2-exit-port))
 
 ;; This function should be called with synchronization as a timeout - it will
 ;; return :pong only when the event is processed (so the loop is processing).
