@@ -27,3 +27,4 @@ and easier for a new backend to be implemented.
   devices and grafts, mediums and ports.
 - [[file:doc/jackdaniel-sdl-backend-guide.org][Some unofficial notes on making a SDL backend by Daniel Kochmański.]] I think I
   grabbed this from a link on the #clim irc channel.
+- [[https://irclog.tymoon.eu/libera/%23clim?from=2022-01-01T06%3A28%3A12&to=2022-08-30T18%3A28%3A12&search=sdl&by][Search #clim irc channel for sdl]]

@@ -23,13 +23,16 @@
   (print-unreadable-object (object stream :identity t :type t)
     (format stream "~S ~S" :id (sdl-port-id object))))
 
+(defun run-event-handler (event-type event)
+  ())
+
 ;; This implements semantics of process-next-event but without distributing
 ;; the event - there is no need for the port argument.
 (defun %next-sdl2 (wait-function timeout)
   (when (maybe-funcall wait-function)
     (return-from %next-sdl2 (values nil :wait-function)))
   (sdl2:with-sdl-event (event)
-    (alx:if-let ((ev (%read-sdl2 event timeout)))
+    (alx:if-let ((ev-available? (%read-sdl2 event timeout)))
       (let* ((event-type (sdl2:get-event-type event))
              (handler-result (handle-sdl2-event event-type event)))
         (when-let ((fr (%get-future-result-for-event event)))
@@ -72,6 +75,7 @@
     (incf *completed-loops*)))
 
 (defun %port-loop (port)
+  (unless port (error "Null port! Can't loop"))
     (unwind-protect
          (handler-bind ((error
                           (lambda (condition)

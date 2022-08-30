@@ -5,8 +5,8 @@
 (defun ensure-current-port ()
   (unless *current-port*
     (let ((sdl2-port (make-instance 'clim-sdl2::sdl2-port)))
-      (setf *current-port* sdl2-port)
-      sdl2-port)))
+      (setf *current-port* sdl2-port)))
+  *current-port*)
 
 (defun start-port-event-loop ()
   (let ((port (ensure-current-port)))
