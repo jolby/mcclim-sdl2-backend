@@ -14,7 +14,6 @@
 (defmethod initialize-instance :after ((port sdl2-port) &rest initargs)
   (declare (ignore initargs))
   (%sdl-port-id (gensym "SDL2-PORT-") port)
-  ;; FIXME: it seems bizarre for this to be necessary
   (push (make-instance 'sdl2-frame-manager :port port)
         (slot-value port 'climi::frame-managers))
     (log:info "SDL2 Port initialize-instance: ~a ~%" port))
