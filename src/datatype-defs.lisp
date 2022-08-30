@@ -2,6 +2,7 @@
 
 ;; Conditions
 (define-condition sdl2-exit-port (condition) ())
+(define-condition sdl2-event-handler-error (condition) ())
 
 ;; Structs
 (defstruct (future-result

@@ -23,8 +23,33 @@
   (print-unreadable-object (object stream :identity t :type t)
     (format stream "~S ~S" :id (sdl-port-id object))))
 
-(defun run-event-handler (event-type event)
-  ())
+(defun run-event-handler (event event-type event-id)
+  ;;Enclose the event-handler/future result in
+  ;;an unwind-protect and collect any error to return as
+  ;;a future result. Also, need to cleanup any user data
+  ;;attached to the event.
+  (unwind-protect
+       (let ((handler-result nil)
+             (error? nil))
+         (handler-case
+             (setf handler-result (handle-sdl2-event event-type event))
+           (t (c)
+             (log:error "~a" c)
+             (setf handler-result c
+                   error? t)))
+         (when-let ((fr (%get-future-result-for-event event)))
+           (let ((lock (fres-lock fr))
+                 (cv (fres-completion-cv fr)))
+             (setf (fres-value-provided? fr) t
+                   (fres-state fr) (if error? :error :success)
+                   (fres-value fr) handler-result)
+             (bt:with-lock-held (lock)
+               (bt:condition-notify cv))))
+         (values handler-result event-type))
+    ;;ensure we release any user data we may have attached to the event
+    (when (and event-id
+               (not (eq event-type :lisp-message)))
+      (sdl2::free-user-data event-id)) ))
 
 ;; This implements semantics of process-next-event but without distributing
 ;; the event - there is no need for the port argument.
@@ -32,21 +57,14 @@
   (when (maybe-funcall wait-function)
     (return-from %next-sdl2 (values nil :wait-function)))
   (sdl2:with-sdl-event (event)
-    (alx:if-let ((ev-available? (%read-sdl2 event timeout)))
-      (let* ((event-type (sdl2:get-event-type event))
-             (handler-result (handle-sdl2-event event-type event)))
-        (when-let ((fr (%get-future-result-for-event event)))
-          (let ((lock (fres-lock fr))
-                (cv (fres-completion-cv fr)))
-          (setf (fres-value-provided? fr) t
-                (fres-state fr) :success
-                (fres-value fr) handler-result)
-            (bt:with-lock-held (lock)
-              (bt:condition-notify cv))))
-        (values handler-result event-type))
-      (if (maybe-funcall wait-function)
-          (values nil :wait-function)
-          (values nil :timeout)))))
+    (if (%read-sdl2 event timeout)
+        (let* ((event-type (sdl2:get-event-type event))
+               (event-id (and (sdl2::user-event-type-p event-type)
+                              (%get-user-event-id event))))
+          (run-event-handler event event-type event-id))
+        (if (maybe-funcall wait-function)
+            (values nil :wait-function)
+            (values nil :timeout)))))
 
 
 (defmethod process-next-event ((port sdl2-port) &key wait-function timeout)
@@ -83,7 +101,7 @@
                             (return-from %port-loop)))
                         (sdl2-exit-port
                           (lambda (c)
-                            (format t "sdl2-exit-port handler: ~a ~%" c)
+                            (log:info "sdl2-exit-port handler: ~a " c)
                             (return-from %port-loop))))
 
            (setf *keep-running* t)

@@ -181,6 +181,9 @@
 (define-sdl2-request sdl2-exit-port ()
   (signal 'sdl2-exit-port))
 
+(define-sdl2-request sdl2-event-handler-error (msg)
+  (signal 'sdl2-event-handler-error :report msg))
+
 ;; This function should be called with synchronization as a timeout - it will
 ;; return :pong only when the event is processed (so the loop is processing).
 (define-sdl2-request sdl2-ping ()

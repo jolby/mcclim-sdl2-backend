@@ -32,7 +32,11 @@
   (run-form (clim-sdl2::sdl2-delay 1000))
   (run-form (clim-sdl2::sdl2-delay 1000 :synchronize t))
   (run-form (clim-sdl2::sdl2-delay 1000 :synchronize 500))
-  (run-form (clim-sdl2::sdl2-delay 1000 :synchronize 2000)))
+  (run-form (clim-sdl2::sdl2-delay 1000 :synchronize 2000))
+
+  ;; This causes the event loop to hang
+  ;; (run-form (clim-sdl2::sdl2-event-handler-error "Testing Handler Errors" :synchronize t))
+  )
 
 (defun run ()
   (unwind-protect
