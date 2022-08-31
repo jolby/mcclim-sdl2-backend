@@ -32,7 +32,8 @@
     (set-mirror-sheet port (sdl2:get-window-id win) sheet)
     ;;XXX Do we want to do this???
     (setf (port sheet) port)
-    win
+
+    (make-instance 'sdl2-mirror :window win)
     ))
 
 (comment
