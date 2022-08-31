@@ -28,9 +28,10 @@
          (title (sheet-pretty-name sheet))
          (win (create-window sheet title w h :synchronize t))) ;;maybe we could pass a callback?
     (log:info "Created win: ~a" win)
-    ;; (climi::port-register-mirror port sheet win)
     (setf (sdl-port-window port) win)
     (set-mirror-sheet port (sdl2:get-window-id win) sheet)
+    ;;XXX Do we want to do this???
+    (setf (port sheet) port)
     win
     ))
 
