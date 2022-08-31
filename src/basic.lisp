@@ -209,7 +209,7 @@
 ;;;;
 (define-sdl2-core-event-handler (ev :windowevent) (event window-id timestamp data1 data2)
   (alexandria:when-let ((sheet (get-mirror-sheet *sdl2-port* window-id)))
-    (let ((event-key (autowrap:enum-key '(:enum (windowevent.event)) event)))
+    (let ((event-key (autowrap:enum-key 'sdl2-ffi:sdl-window-event-id event)))
       (handle-sdl2-window-event event-key sheet timestamp data1 data2))))
 
 (defmethod handle-sdl2-window-event ((key (eql :close)) sheet stamp d1 d2)
@@ -223,6 +223,7 @@
   (log:info "Repainting a window.")
   ;; The call to GET-WINDOW-SURFACE is for side the effect, namely to ensure
   ;; that the surface is allocated (to be able to call UPDATE-WINDOW).
-  (let ((window (sheet-direct-mirror sheet)))
-    (sdl2:get-window-surface window)
-    (sdl2:update-window window)))
+  (when-let ((mirror (sheet-direct-mirror sheet)))
+    (let ((window (window mirror)))
+      (sdl2:get-window-surface window)
+      (sdl2:update-window window))))
