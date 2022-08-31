@@ -22,7 +22,8 @@
   :components ((:module "basic-demos"
                 :pathname "demo"
                 :components ((:file "packages")
-                             (:file "001-port-event-loop")))))
+                             (:file "001-port-event-loop")
+                             (:file "002-create-plain-sheet")))))
 
 ;; REPL helpers
 ;; 1. Open this file in emacs with sly/slime
@@ -34,3 +35,5 @@
 ;; Demos
 #+nil (asdf:load-system :mcclim-sdl2/demo)
 #+nil (clim-sdl2-demo/001-port-event-loop:run)
+#+nil (clim-sdl2-demo/002-create-plain-sheet:run)
+#+nil (in-package :clim-sdl2-demo/002-create-plain-sheet)

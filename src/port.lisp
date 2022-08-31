@@ -34,6 +34,7 @@
              (setf handler-result (handle-sdl2-event event-type event))
            (t (c)
              (log:error "~a" c)
+             (trivial-backtrace:print-backtrace c)
              (setf handler-result c
                    error? t)))
          (when-let ((fr (%get-future-result-for-event event)))

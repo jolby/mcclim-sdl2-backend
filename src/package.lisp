@@ -8,6 +8,7 @@
                 #:if-let
                 #:when-let
                 #:maybe-funcall
-                #:sheet-mirror-geometry)
+                #:sheet-mirror-geometry
+                #:sheet-pretty-name)
   (:local-nicknames
    (#:alx #:alexandria)))

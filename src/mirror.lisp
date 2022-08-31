@@ -8,6 +8,45 @@
     (sdl2-mirror (window object))
     (null nil)))
 
+(defun get-mirror-sheet (port window-id)
+  (gethash window-id (clim-sdl2::sdl-port/window-id-to-sheet port)))
+
+(defun set-mirror-sheet (port window-id window)
+  (setf (gethash window-id (clim-sdl2::sdl-port/window-id-to-sheet port)) window))
+
+(define-sdl2-request create-window (sheet title w h)
+  (log:info "sheet: ~a, title: ~a, w: ~a, h: ~a" sheet title w h)
+  (sdl2:create-window :title title
+                      :w w
+                      :h h
+                      :flags (append '(:resizable)
+                              (if (sheet-enabled-p sheet) '(:shown) nil))))
+
+(defmethod realize-mirror ((port sdl2-port) (sheet mirrored-sheet-mixin))
+  (let* ((w (bounding-rectangle-width sheet))
+         (h (bounding-rectangle-height sheet))
+         (title (sheet-pretty-name sheet))
+         (win (create-window sheet title w h :synchronize t))) ;;maybe we could pass a callback?
+    (log:info "Created win: ~a" win)
+    ;; (climi::port-register-mirror port sheet win)
+    (setf (sdl-port-window port) win)
+    (set-mirror-sheet port (sdl2:get-window-id win) sheet)
+    win
+    ))
+
+(comment
+
+
+  )
+
+(define-sdl2-request destroy-window (window)
+  (sdl2:destroy-window window))
+
+(defmethod destroy-mirror ((port sdl2-port) (sheet mirrored-sheet-mixin))
+  (when-let ((mirror (sheet-direct-mirror sheet)))
+    (let ((window (window mirror)))
+      (destroy-window window))))
+
 (define-sdl2-request change-window-size (window x y w h)
   (sdl2-ffi.functions:sdl-set-window-position window x y)
   (sdl2-ffi.functions:sdl-set-window-size window w h))
@@ -30,14 +69,6 @@
     ((port sdl2-port) (sheet mirrored-sheet-mixin) icon)
   (when-let ((mirror (sheet-direct-mirror sheet)))
     (log:warn "clim-sdl2:port-set-mirror-icon NIY...")))
-
-(define-sdl2-request destroy-window (window)
-  (sdl2:destroy-window window))
-
-(defmethod destroy-mirror ((port sdl2-port) (sheet mirrored-sheet-mixin))
-  (when-let ((mirror (sheet-direct-mirror sheet)))
-    (let ((window (window mirror)))
-      (destroy-window window))))
 
 (define-sdl2-request raise-window (window)
   (sdl2:raise-window window))

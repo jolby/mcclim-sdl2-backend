@@ -66,6 +66,11 @@
 ;; Methods for this function are defined with a macro ~define-sdl2-handler~.
 (defgeneric handle-sdl2-event (event-type event))
 
+(defgeneric handle-sdl2-window-event (event-key sheet timestamp data1 data2)
+  (:method (event-key sheet timestamp data1 data2)
+    (log:debug "Unhandled window event ~s." event-key)))
+
+
 (defmethod handle-sdl2-event ((any-event-type t) (any-event t))
   (log:warn "Unknown event type: ~a" any-event-type))
 
@@ -152,6 +157,7 @@
      (sdl2:register-user-event-type ,user-event-type)
 
      (defun ,request-fn-name (,@event-params &key (synchronize nil synchronize-p))
+       (declare (ignorable synchronize synchronize-p))
        (let ((event-params-plist (list ,@(%make-plist-from-binding-names event-params))))
          (cond ((null synchronize) (push-event ,user-event-type event-params-plist))
                ((numberp synchronize) (push-event-sync-wait ,user-event-type event-params-plist
@@ -160,6 +166,7 @@
 
      (define-sdl2-user-event-handler (event ,user-event-type) (,@event-params)
        ,@handler-body))))
+
 
 
 ;;;; =========================================================================
@@ -195,3 +202,27 @@
   (sdl2:delay ms)
   :done)
 
+
+;;;; =========================================================================
+;;;;
+;;;; Window event handling
+;;;;
+(define-sdl2-core-event-handler (ev :windowevent) (event window-id timestamp data1 data2)
+  (alexandria:when-let ((sheet (get-mirror-sheet *sdl2-port* window-id)))
+    (let ((event-key (autowrap:enum-key '(:enum (windowevent.event)) event)))
+      (handle-sdl2-window-event event-key sheet timestamp data1 data2))))
+
+(defmethod handle-sdl2-window-event ((key (eql :close)) sheet stamp d1 d2)
+  (log:info "Destroying a window.")
+  (clim:destroy-mirror (clim:port sheet) sheet))
+
+;; Between pressing quit and the actual close the user may still use the
+;; window for a brief period, so i.e a window event may sneak in. The window
+;; event handler should ignore events to windows that are already destroyed.
+(defmethod handle-sdl2-window-event ((key (eql :exposed)) sheet stamp d1 d2)
+  (log:info "Repainting a window.")
+  ;; The call to GET-WINDOW-SURFACE is for side the effect, namely to ensure
+  ;; that the surface is allocated (to be able to call UPDATE-WINDOW).
+  (let ((window (sheet-direct-mirror sheet)))
+    (sdl2:get-window-surface window)
+    (sdl2:update-window window)))
