@@ -60,7 +60,7 @@
 
   (setf (climi::sheet-pretty-name *plain-sheet*) "BLAH BLAH BLAH")
 
-  (destroy-mirror (port *plain-sheet*) *plain-sheet*)
+  ;; (destroy-mirror (port *plain-sheet*) *plain-sheet*)
   )
 
 (defun run ()
