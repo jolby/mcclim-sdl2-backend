@@ -58,18 +58,8 @@
   (realize-mirror *current-port* *plain-sheet*)
 
 
-  ;; This sets the slot, but errors afterwards
-  ;; There is no applicable method for the generic function
-  ;; #<STANDARD-GENERIC-FUNCTION CLIM-BACKEND:PORT-SET-MIRROR-NAME (2)>
-  ;; when called with arguments (NIL
-  ;; #<CLIM-SDL2-DEMO/002-CREATE-PLAIN-SHEET::PLAIN-SHEET {100A498543}>
-  ;; "BLAH BLAH BLAH").
   (setf (climi::sheet-pretty-name *plain-sheet*) "BLAH BLAH BLAH")
 
-  ;; *plain-sheet* doesn't have the port slot set. Does that need to be
-  ;; set in realize-mirror??? CLX doesn't appear to do that. The old
-  ;; sdl-test branch made a call: (climi:port-register-mirror port sheet mirror)
-  ;; that doesn't exist anymore
   (destroy-mirror (port *plain-sheet*) *plain-sheet*)
   )
 
