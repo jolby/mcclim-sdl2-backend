@@ -1,5 +1,9 @@
 * Introduction
-An unofficial, experimental SDL2 backend for McCLIM.
+A DEPRECATED unofficial, experimental SDL2 backend for McCLIM.
+
+- Update 2022-09-01 Daniel Kochmański has created an official sdl2 backend in
+  the McCLIM repository. It's in the [[https://github.com/McCLIM/McCLIM/tree/backend-sdl2][backend-sdl2 branch]]. This project is now
+  deprecated and I'm only using it for personal experiments.
 
 - 2022-08-19 A note from Joel Boehland (jolby).
 
@@ -8,10 +12,6 @@ branch of the McCLIM repository and the documentation for creating backend by
 the primary maintainer of McCLIM, Daniel Kochmański (jackdaniel). I am also
 doing this for my own curiosity and education to get a deeper understanding of CLIM
 and how it is implemented.
-
-Daniel Kochmański is apparently working on an SDL2 backend, and if that
-becomes public, it would be the official SDL2 backend for McCLIM and this
-project would probably be shelved.
 
 * Resources
 Daniel Kochmański has published a number of tutorials and guides explaining the
@@ -25,6 +25,5 @@ and easier for a new backend to be implemented.
   of McCLIM to modern graphical windowing systems.
 - [[https://mcclim.common-lisp.dev/posts/Sheets-as-ideal-forms.html][Sheets as Ideal Forms]] Great document explaining the linkage between physical
   devices and grafts, mediums and ports.
-- [[file:doc/jackdaniel-sdl-backend-guide.org][Some unofficial notes on making a SDL backend by Daniel Kochmański.]] I think I
-  grabbed this from a link on the #clim irc channel.
+- [[https://github.com/McCLIM/McCLIM/blob/backend-sdl2/Backends/SDL2/README.org][SDL backend implementor's guide.]] by Daniel Kochmański. Now in McCLIM repo.
 - [[https://irclog.tymoon.eu/libera/%23clim?from=2022-01-01T06%3A28%3A12&to=2022-08-30T18%3A28%3A12&search=sdl&by][Search #clim irc channel for sdl]]

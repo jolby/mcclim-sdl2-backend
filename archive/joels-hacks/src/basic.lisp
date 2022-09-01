@@ -140,7 +140,7 @@
     ;; (setf *last-future-result* fr)
     (fres-value fr)))
 
-;; This macro registers an user event type, defines a function
+;; This macro registers a user event type, defines a function
 ;; ~request-fn-name~ that queues event of that type and a method on
 ;; ~handle-sdl2-event~ that implements the body. In single-processing mode
 ;; handler is called directly.
@@ -212,13 +212,13 @@
     (let ((event-key (autowrap:enum-key 'sdl2-ffi:sdl-window-event-id event)))
       (handle-sdl2-window-event event-key sheet timestamp data1 data2))))
 
+;; Between pressing quit and the actual close the user may still use the
+;; window for a brief period, so i.e a window event may sneak in. The window
+;; event handler should ignore events to windows that are already destroyed.
 (defmethod handle-sdl2-window-event ((key (eql :close)) sheet stamp d1 d2)
   (log:info "Destroying a window.")
   (clim:destroy-mirror (clim:port sheet) sheet))
 
-;; Between pressing quit and the actual close the user may still use the
-;; window for a brief period, so i.e a window event may sneak in. The window
-;; event handler should ignore events to windows that are already destroyed.
 (defmethod handle-sdl2-window-event ((key (eql :exposed)) sheet stamp d1 d2)
   (log:info "Repainting a window.")
   ;; The call to GET-WINDOW-SURFACE is for side the effect, namely to ensure

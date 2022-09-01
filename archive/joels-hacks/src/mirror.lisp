@@ -9,10 +9,10 @@
     (null nil)))
 
 (defun get-mirror-sheet (port window-id)
-  (gethash window-id (clim-sdl2::sdl-port/window-id-to-sheet port)))
+  (gethash window-id (sdl-port/window-id-to-sheet port)))
 
 (defun set-mirror-sheet (port window-id window)
-  (setf (gethash window-id (clim-sdl2::sdl-port/window-id-to-sheet port)) window))
+  (setf (gethash window-id (sdl-port/window-id-to-sheet port)) window))
 
 (define-sdl2-request create-window (sheet title w h)
   (log:info "sheet: ~a, title: ~a, w: ~a, h: ~a" sheet title w h)
