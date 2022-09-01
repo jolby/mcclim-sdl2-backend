@@ -1,7 +1,7 @@
 * Introduction
 A DEPRECATED unofficial, experimental SDL2 backend for McCLIM.
 
-- Update 2022-09-01 Daniel Kochmański has created an official sdl2 backend in
+- Update: 2022-09-01 Daniel Kochmański has created an official sdl2 backend in
   the McCLIM repository. It's in the [[https://github.com/McCLIM/McCLIM/tree/backend-sdl2][backend-sdl2 branch]]. This project is now
   deprecated and I'm only using it for personal experiments.
 
