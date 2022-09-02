@@ -1,0 +1,445 @@
+#+title: SDL2 backend architecture
+#+author: Daniel 'jackdaniel' Kochmański
+#+date: [2022-04-12 wto]
+
+* Introduction
+
+  SDL2 is a fine choice for an interactive and portable backend. The
+  abstraction is thin and the library supports all major operating systems.
+  The main limitation of the library is that it is not thread safe - all SDL2
+  functions are expected to be called from a single thread (pushing events is
+  an exception).
+
+  In Common Lisp ecosystem there is a library ~cl-sdl2~ that proposes some
+  abstractions over a "raw" SDL2 library. This backend relies on ~cl-sdl2~ for
+  ffi bindings (generated with autowrap) provided by it, but I will mostly
+  ignore ~cl-sdl2~ abstractions (some are used as a temporary measure).
+
+  This document purpose is to emphasize important features that each backend
+  must or should implement. Many sdl2-specific details are not explained and
+  the reader should read the code to understand them. Keep in mind that most
+  of these recommendations are a result of figuring things out while writing
+  this backend - this is not a definitive guide.
+
+* Syntactic sugar
+
+  There are two approaches to ensure that SDL2 runs in a single thread.
+
+  1. have a singular loop and communicate with it using a thread-safe channel
+  2. assume that the environment is single-threaded
+
+  McCLIM works fine with either model. That demands from the syntactic sugar
+  to enable either style of interaction. For the multithreaded environment
+  some synchronization primitives are introduced (most notably a condition
+  variable to notify that the display server is already initialized).
+
+  #+begin_src lisp
+    (defvar *initialized-p* nil)
+    (defvar *initialized-cv* (clim-sys:make-condition-variable))
+    (defvar *initialized-lock* (clim-sys:make-lock "SDL2 init cv lock"))
+
+    (defun %init-sdl2 ()
+      (unless *initialized-p*
+        (sdl2-ffi.functions:sdl-init (autowrap:mask-apply 'sdl-init-flags '(:everything)))
+        (setf *initialized-p* t)
+        (clim-sys:condition-notify *initialized-cv*)
+        (log:info "Hello!")))
+
+    (defun %quit-sdl2 ()
+      (when *initialized-p*
+        (log:info "Good bye.")
+        (setf *initialized-p* nil)
+        (sdl2-ffi.functions:sdl-quit)))
+
+    (defun %read-sdl2 (event timeout)
+      (let ((rc (if (null timeout)
+                    (sdl2-ffi.functions:sdl-wait-event event)
+                    (sdl2-ffi.functions:sdl-wait-event-timeout event timeout))))
+        (= rc 1)))
+
+    ;;; This implements semantics of process-next-event but without distributing
+    ;;; the event - there is no need for the port argument.
+    (defun %next-sdl2 (wait-function timeout)
+      (when (maybe-funcall wait-function)
+        (return-from %next-sdl2 (values nil :wait-function)))
+      (sdl2:with-sdl-event (event)
+        (alx:if-let ((ev (%read-sdl2 event timeout)))
+          (let ((event-type (sdl2:get-event-type event)))
+            (values (handle-sdl2-event event-type event) event-type))
+          (if (maybe-funcall wait-function)
+              (values nil :wait-function)
+              (values nil :timeout)))))
+  #+end_src
+
+  The function ~handle-sdl2-event~ is used to implement event handling. When
+  function that reads events calls ~handle-sdl2-event~ to dispatch on them.
+  Methods for this function are defined with a macro ~define-sdl2-handler~.
+  For example:
+
+  #+begin_src lisp
+    ;;; User-requested exit - this event is usually signaled when the last window
+    ;;; is closed (in addition to windowevent/close), but may be also prompted by
+    ;;; the window manager or an interrupt. The application may ignore it.
+    (defvar *quit-stops-the-port-p* nil)
+
+    (define-sdl2-handler (event :quit) ()
+      (log:info "Quit requested... ~a"
+                (if *quit-stops-the-port-p* "signaling" "ignoring"))
+      (when *quit-stops-the-port-p*
+        (signal 'sdl2-exit-port)))
+  #+end_src
+
+  The second argument to the macro is a list of arguments. The event is
+  destructured (with the library ~autowrap~) to estabilish a lexical context
+  for the handler body. For details see ~expand-handler-for-core-event~.
+
+  To communicate with the main thread another convenience macro is defined:
+  ~define-sdl2-request~. For example:
+
+  #+begin_src lisp
+    (define-sdl2-request sdl2-exit-port ()
+      (signal 'sdl2-exit-port))
+  #+end_src
+
+  This macro registers an user event type, defines a function ~sdl2-exit-port~
+  that queues event of that type and a method on ~handle-sdl2-event~ that
+  implements the body. In single-processing mode handler is called directly.
+
+  The arglist is similar as with the "system events" but we expand them by a
+  different mechanism. Request lambda list is (,@args &key synchronize) - the
+  keyword argument allows to wait for the result returned by the handler.
+
+  #+begin_src lisp
+    ;;; This function should be called with synchronization as a timeout - it will
+    ;;; return :pong only when the event is processed (so the loop is processing).
+    (define-sdl2-request sdl2-ping ()
+      :pong)
+
+    ;;; This function is for testing.
+    ;;; WARNING this will freeze the event loop for requested amount of time.
+    (define-sdl2-request sdl2-delay (ms)
+      (sdl2:delay ms)
+      :done)
+  #+end_src
+
+  #+begin_example
+    MCCLIM-SDL2> (sdl2-ping)                       ;; NIL
+    MCCLIM-SDL2> (sdl2-ping :synchronize t)        ;; :PONG
+    MCCLIM-SDL2> (sdl2-delay 1000)                 ;; NIL
+    MCCLIM-SDL2> (sdl2-delay 1000 :synchronize .5) ;; NIL
+    MCCLIM-SDL2> (sdl2-delay 1000 :synchronize 2)  ;; :DONE
+  #+end_example
+
+  That concludes the syntactic sugar used by this project. The see
+  implementation details see the file ~utilities.lisp~.
+
+* Implementing the port
+
+  The class ~sdl2-port~ represents a connection with the display server. Since
+  there may be only one SDL2 context, it is shared by all instances the port
+  by class-allocating relevant slots.
+
+  Main functions that must be implemented by the port are:
+  - initialize-instance that starts the port
+  - destroy-port that stops it
+  - restart-port that stops (when running) and resumes the port
+  - process-next-event that reads and distributes events
+
+  The function ~process-next-event~ has two keyword parameters ~wait-function~
+  and ~timeout~. When running in a single process these parameters may be used
+  to implement semantics of the event queue (and ~stream-read-gesture~).
+
+  ~wait-function~ requires some additional commentary. It is a predicate that
+  returns ~t~ when the caller doesn't wait for the input anymore (even if
+  there is no event to be distributed). This function is called by the port at
+  least once, but may be called multiple times while reading the event. Some
+  "host" events may not be mapped to "clim" events, but they may mutate a
+  state that is checked by the ~wait-function~.
+
+  ~process-next-event~ reads host events until the clim event is returned or
+  either the wait function or the timeout is reached:
+
+  #+begin_src lisp
+    (defmethod process-next-event ((port sdl2-port) &key wait-function timeout)
+      (let ((*sdl2-port* port))
+        (loop (multiple-value-bind (result reason)
+                  (%next-sdl2 wait-function timeout)
+                (cond ((eventp result)
+                       (distribute-event port result)
+                       (return-from process-next-event
+                         (values t reason)))
+                      ((member reason '(:wait-function :timeout))
+                       (return-from process-next-event
+                         (values result reason))))))))
+  #+end_src
+
+  The event loop provides a simple restart to ignore an error. Additionally
+  when the error is signaled in the request that is synchronized, then the
+  condition is returned as a value. In the future it is worth considering to
+  differentiate in the event loop between "critical" host errors that invoke
+  the debugger and "non-critical" user errors that are either quietly ignored
+  (by the event loop) or logged.
+
+  #+begin_src lisp
+    (defun %loop-port (port)
+      (%init-sdl2)
+      (unwind-protect
+           (handler-bind ((sdl2-exit-port
+                            (lambda (c)
+                              (declare (ignore c))
+                              (return-from %loop-port))))
+             (loop
+               (with-simple-restart (ignore "Ignore error and continue.")
+                 (process-next-event port))))
+        (%quit-sdl2)))
+  #+end_src
+
+  When the port is run on a single-threaded host then the loop above is not
+  started by the port, instead it is the user (i.e clim event queue) calls
+  ~process-next-event~ when it waits for input.
+
+* Managing windows
+
+  In CLIM a mirrored sheet represent a host windows. The mirror is an actual
+  handle to the window. There are three mixins for mirrored sheets:
+
+  - mirrored-sheet-mixin  :: the sheet is mirrored on the display host
+  - top-level-sheet-mixin :: the sheet is a top-level window
+  - unmanaged-sheet-mixin :: the sheet is not managed by a window manager
+
+  They may be used in various combinations depending on needs. For example a
+  top level sheet without a mirror /could/ be realized on a special type of
+  graft that is also a mirrored sheet that may drawn on. The port is only
+  concerned with mirrored sheets (and the rest is handled by the core).
+
+  The mirror managament protocol is composed of the following functions:
+
+  - realize-mirror :: the constructor
+  - destroy-mirror :: the destructor
+  - port-set-mirror-name :: set the window title
+  - port-set-mirror-icon :: set the window icon
+  - port-set-mirror-geometry :: set the mirror shape - handling mirrors with a
+    shape other than a rectangle is optional and it is permissible to use the
+    bounding rectangle of the region
+  - raise-mirror, bury-mirror :: manipulates the z-order of the window stack
+  - port-enable-sheet, port-disable-sheet :: map and unmap the sheet - this is
+    different than realize and destroy because the same window may be mapped
+    again after disabling it
+  - port-shrink-sheet, port-unshrink-sheet :: iconfiy/deiconfiy the window
+
+  For details of the implementation see the file ~mirror.lisp~. A general rule
+  is for the clim method to trampline to a request that maps directly to SDL2
+  ffi calls. It is a responsibility of the request to signal an error.
+
+  For example:
+
+  #+begin_src lisp
+    (defmethod port-set-mirror-geometry (port sheet region)
+      (with-bounding-rectangle* (x y :width w :height h) region
+        (change-window-size (window-id (sheet-direct-mirror sheet)) x y w h)))
+
+    (define-sdl2-request change-window-size (window x y w h)
+      (sdl2-ffi.functions:sdl-set-window-position window x y)
+      (sdl2-ffi.functions:sdl-set-window-size window w h))
+  #+end_src
+
+  Functions ~realize-mirror~, ~destroy-mirror~, ~port-set-mirror-geometry~
+  ~port-enable-sheet~ and ~port-disable-sheet~ are the indespensible minimum
+  for CLIM to work. Other functions still must have stub methods.
+
+  The function ~realize-mirror~ the window based on the sheet properties. The
+  created sheet has certain dimensions specified by its region - the mirror is
+  expected to show it all. The native region and the native transformation are
+  responsible for mapping the window "native coordinates" to the sheet region.
+  For example when a sheet region is ~[-100, -100, 100, 100]~, then the native
+  region would be ~[0, 0, 200, 200]~ and the native transformation would be a
+  translation ~[100, 100]~. For example the sheet coordinate ~(0, 0)~ is
+  translated with a native translation to a native coordinate ~(100, 100)~.
+
+  #+begin_src lisp
+    (defmethod realize-mirror ((port sdl2-port) (sheet top-level-sheet-mixin))
+      (with-bounding-rectangle* (x y :width w :height h) sheet
+        (log:info "Creating a new window [~s ~s :w ~s :h ~s]" x y w h)
+        (let* ((title (sheet-pretty-name sheet))
+               (flags '(:shown :resizable))
+               (id (create-window title :centered :centered w h flags :synchronize t))
+               (mirror (make-instance 'sdl2-mirror :id id :sheet sheet))
+               (native-region (make-rectangle* 0 0 w h))
+               (native-transformation (make-translation-transformation (- x) (- y))))
+          (alx:when-let ((icon (sheet-icon sheet)))
+            (change-window-icon id (alx:ensure-car icon)))
+          (setf (climi::%sheet-native-region sheet) native-region
+                (climi::%sheet-native-transformation sheet) native-transformation
+                (id->mirror port id) mirror))))
+  #+end_src  
+
+  # FIXME we should implement handling of the ~window-configuration-event~ by
+  # the ~top-level-sheet-mixin~, not a pane(!).
+  # 
+  # FIXME ~window-configuration-event~ is badly handled
+
+  McCLIM core will update the sheet native region and the sheet native
+  transformation when the ~window-configuration-event~ is handled by the
+  ~top-level-sheet-pane~ and when ~move-and-resize-sheet~ is called.
+
+  Finally here is an outline of handling window events. The appropriate
+  handler trampolines to a generic function ~hndle-sdl2-window-event~ that is
+  specialized on the window event type key.
+
+  #+begin_src lisp
+    ;;; Window SDL2 event handlers.
+
+    (define-sdl2-handler (ev :windowevent) (event window-id timestamp data1 data2)
+      (alx:when-let ((sheet (mirror-sheet (id->mirror *sdl2-port* window-id)))
+        (let ((event-key (autowrap:enum-key '(:enum (windowevent.event)) event)))
+          (handle-sdl2-window-event event-key sheet timestamp data1 data2))))
+
+    (defgeneric handle-sdl2-window-event (event-key sheet timestamp data1 data2)
+      (:method (event-key sheet timestamp data1 data2)
+        (log:debug "Unhandled window event ~s." event-key)))
+
+    (defmethod handle-sdl2-window-event ((key (eql :close)) sheet stamp d1 d2)
+      (log:info "Destroying a window.")
+      (make-instance 'window-manager-delete-event :sheet sheet :timestamp stamp))
+
+    (defmethod handle-sdl2-window-event ((key (eql :exposed)) sheet stamp d1 d2)
+      (log:info "Repainting a window.")
+      ;; The call to GET-WINDOW-SURFACE is for side the effect, namely to ensure
+      ;; that the surface is allocated (to be able to call UPDATE-WINDOW).
+      (let ((window (sdl2-window (window-id (sheet-mirror sheet)))))
+        (sdl2:get-window-surface window)
+        (sdl2:update-window window)))
+  #+end_src
+
+* Defining ~plain-sheet~
+
+  To test whether this functionality works, it is necessary to supply a sheet
+  to ~realize-mirror~. It is a good occasion to discuss a difference between
+  sheets and panes.
+
+  - sheet :: a window that has a region geometry and a coordinate system; it
+    implements protocols for parent-child relationship, input, output and
+    repaint.
+
+  - pane :: a sheet tailored for building an application frame. It is a higher
+    level abstraction and ports should be ignorant of pane's protocols[fn:1].
+
+  For example "raw" sheets have only default no-op methods on functions
+  ~handle-event~ and ~handle-repaint~, while panes have useful methods
+  implementing the behavior expected from application frames. The file
+  ~plain-sheet~ contains such raw sheet for testing:
+
+  #+begin_src lisp
+    (defvar *glider*
+      (make-pattern-from-bitmap-file
+       (asdf:component-pathname
+        (asdf:find-component "clim-examples" '("images" "glider.png")))))
+
+    (defclass plain-sheet (;; repainting
+                           immediate-repainting-mixin
+                           ;; input
+                           immediate-sheet-input-mixin
+                           ;; output
+                           sheet-mute-output-mixin
+                           ;; geometry
+                           sheet-identity-transformation-mixin
+                           ;; genealogy
+                           sheet-parent-mixin
+                           sheet-leaf-mixin
+                           ;; windowing
+                           top-level-sheet-mixin
+                           mirrored-sheet-mixin
+                           ;; the base class
+                           basic-sheet)
+      ()
+      (:default-initargs :icon *glider*
+                         :pretty-name "McCLIM Test Sheet"
+                         :region (make-rectangle* 1000 100 1400 500)))
+  #+end_src
+
+  Soon we'll define more useful input handlers, but for the time being let's
+  make stubs:
+
+  #+begin_src lisp
+    (defgeneric handle-sdl2-window-event (event-key sheet timestamp data1 data2)
+      (:method (event-key sheet timestamp data1 data2)
+        (log:debug "Unhandled window event ~s." event-key)))
+
+    (define-sdl2-handler (ev :windowevent) (event window-id timestamp data1 data2)
+      (alx:when-let ((sheet (get-mirror-sheet *sdl2-port* window-id)))
+        (let ((event-key (autowrap:enum-key '(:enum (windowevent.event)) event)))
+          (handle-sdl2-window-event event-key sheet timestamp data1 data2))))
+
+    (defmethod handle-sdl2-window-event ((key (eql :close)) sheet stamp d1 d2)
+      (log:info "Destroying a window.")
+      (destroy-mirror (port sheet) sheet))
+
+    ;;; Between pressing quit and the actual close the user may still use the
+    ;;; window for a brief period, so i.e a window event may sneak in. The window
+    ;;; event handler should ignore events to windows that are already destroyed.
+    (defmethod handle-sdl2-window-event ((key (eql :exposed)) sheet stamp d1 d2)
+      (log:info "Repainting a window.")
+      ;; The call to GET-WINDOW-SURFACE is for side the effect, namely to ensure
+      ;; that the surface is allocated (to be able to call UPDATE-WINDOW).
+      (let ((window (sdl2-window (sheet-mirror sheet))))
+        (sdl2:get-window-surface window)
+        (sdl2:update-window window)))
+  #+end_src
+
+  Now we may fiddle with this sheet:
+
+  #+begin_src lisp
+    (defun open-plain-sheet (path)
+      (let* ((port (find-port :server-path path))
+             ;; Necessity to supply :PORT here is a kludge in the core.
+             (sheet (make-instance 'plain-sheet :port port))
+             (graft (find-graft :port port)))
+        (sheet-adopt-child graft sheet)
+        sheet))
+
+    (defun close-plain-sheet (sheet)
+      (sheet-disown-child (graft sheet) sheet))
+  #+end_src
+
+  #+begin_example
+    > (defparameter *sheet* (open-plain-sheet :sdl2))
+    > (setf (sheet-pretty-name *sheet*) "McCLIM Production Sheet")
+    > (close-plain-sheet *sheet*)
+  #+end_example
+
+* Handling output - the "New Jersey style"
+
+  Creating the window is like having a baby - it is only the beginning. After
+  the window is created, it will receive the event signaling that it has been
+  exposed and available for drawing. Currently we only update the window.
+
+  In the tutorial about writing the SVG backend I've mentioned, that it is
+  enough to implement ~medium-draw-polygon*~ to have all drawing covered,
+  although the result is very inefficient so it is good only for prototypes.
+
+  The initial renderer for the SDL2 backend will also be an inefficient
+  prototype, but the approach will be different. Instead of implementing a
+  single function we will utilize the software renderer bundled with McCLIM,
+  and then copy the pattern array to the window surface.
+
+* Handling input
+
+  Creating the window is like having a baby - it is only the beginning. After
+  the window is created, it will receive the event signaling that it has been
+  exposed and that it is available for drawing. When the window is closed,
+  then an appropriate event will come soon afterwards. And so on. Some events
+  are handled directly by the backend, while other events are distributed to a
+  target sheet.
+
+  When the function returns a clim event, then the event is distributed to the
+  sheet. For that reason we need to maintain a back-pointer from the window id
+  to the associated mirrored sheet. This association may be stored in a port.
+
+  Often the event handler doesn't (or can't) accepts the port argument; that's
+  where special variables shine the brightest. ~process-next-event~ binds
+  ~*sdl2-port*~ to the current port for ~handle-sdl2-event~ methods.
+
+* Footnotes
+
+[fn:1] A backend may define the frame manager that is meant to work with
+higher level abstractions in CLIM (like panes and frames).
