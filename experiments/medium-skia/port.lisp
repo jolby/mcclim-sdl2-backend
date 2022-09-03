@@ -106,6 +106,7 @@
                         (lambda (c)
                           (declare (ignore c))
                           (return-from %loop-port)))
+                      #+ (or)
                       (error
                         (lambda (c)
                           (log:error "Ignoring the error ~s" c)

@@ -170,13 +170,21 @@
   (log:info "Destroying a window.")
   (make-instance 'window-manager-delete-event :sheet sheet :timestamp stamp))
 
+;;; FIXME introduce also resize-event? the handle-event method should also
+;;; update the sheet transformation.
+(defmethod handle-sdl2-window-event ((key (eql :size-changed)) sheet stamp d1 d2)
+  (log:info "Window size changed ~s ~s" d1 d2)
+  (make-instance 'window-configuration-event :sheet sheet :timestamp stamp
+                                             :width d1 :height d2))
+
 ;;; Between pressing quit and the actual close the user may still use the
 ;;; window for a brief period, so i.e a window event may sneak in. The window
 ;;; event handler should ignore events to windows that are already destroyed.
 (defmethod handle-sdl2-window-event ((key (eql :exposed)) sheet stamp d1 d2)
-  (log:info "Repainting a window.")
-  ;; The call to GET-WINDOW-SURFACE is for side the effect, namely to ensure
+  (log:info "Exposing a window.")
+  ;; The call to SDL-GET-WINDOW-SURFACE is for side the effect, namely to ensure
   ;; that the surface is allocated (to be able to call UPDATE-WINDOW).
   (let ((window (sdl2-window (window-id (sheet-mirror sheet)))))
-    (sdl2:get-window-surface window)
-    (sdl2:update-window window)))
+    ;; FIXME check returned values for errors.
+    (sdl2-ffi.functions:sdl-get-window-surface window)
+    (sdl2-ffi.functions:sdl-update-window-surface window)))
