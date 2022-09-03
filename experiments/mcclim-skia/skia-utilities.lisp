@@ -1,4 +1,4 @@
-(in-package #:mcclim-sdl2)
+(in-package #:mcclim-skia)
 
 (defun enumval (enum value)
   (if (integerp value)

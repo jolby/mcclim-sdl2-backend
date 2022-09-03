@@ -1,4 +1,4 @@
-(in-package #:mcclim-sdl2)
+(in-package #:mcclim-skia)
 
 (defclass skia-context ()
   ((%native-interface-sp :initform nil :initarg :native-interface-sp :accessor native-interface-sp)

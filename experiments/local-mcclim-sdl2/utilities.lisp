@@ -2,16 +2,6 @@
 
 (in-package #:mcclim-sdl2)
 
-(defmacro comment (&body body)
-  "A macro that ignores its body and does nothing. Useful for
-  comments-by-example.
-
-  Also, as noted in EXTENSIONS.LISP of 1992, \"This may seem like a
-  silly macro, but used inside of other macros or code generation
-  facilities it is very useful - you can see comments in the (one-time)
-  macro expansion!\""
-  (declare (ignore body)))
-
 
 ;;; Bitmasks, type accessors etc -- cl-libsdl2 has incomplete definitions, so
 ;;; we use these only as a reference, while the actual data is curbed from
@@ -68,8 +58,8 @@
   sdl2-ffi:+sdl-windowevent-hidden+
   sdl2-ffi:+sdl-windowevent-exposed+
   sdl2-ffi:+sdl-windowevent-moved+
-  sdl2-ffi:+sdl-windowevent-resized+
-  sdl2-ffi:+sdl-windowevent-size-changed+
+  sdl2-ffi:+sdl-windowevent-resized+      ; always preceded by size-changed
+  sdl2-ffi:+sdl-windowevent-size-changed+ ; use this event to handle all resizes
   sdl2-ffi:+sdl-windowevent-minimized+
   sdl2-ffi:+sdl-windowevent-maximized+
   sdl2-ffi:+sdl-windowevent-restored+
@@ -123,7 +113,10 @@
           (values nil :timeout)))))
 
 (defun sdl2-window (window-id)
-  (let ((window (sdl2-ffi.functions:sdl-get-window-from-id window-id)))
+  (let ((window (sdl2-ffi.functions:sdl-get-window-from-id
+                 (if (typep window-id 'sdl2-mirror)
+                     (window-id window-id)
+                     window-id))))
     (if (autowrap:wrapper-null-p window)
         (log:warn "Window ~s doesn't exist." window-id)
         window)))
@@ -219,103 +212,3 @@
                 (setf ,result (progn ,@body)))
               (tch:push-queue ,result ,queue)
               ,result))))))
-
-
-;;
-;; Structured cleanups
-(defvar *cleanup-context* nil)
-(defvar *cleanup-context-chain* nil)
-(declaim (special *cleanup-context* *cleanup-context-chain*))
-
-(defun push-cleanup (obj cleanup-fn &optional (cleanup-error-handler nil))
-  ;; (unless *cleanup-context* (error "No *cleanup-context* established. Must call this wrapped in with-cleanup-context"))
-  (push (list obj cleanup-fn cleanup-error-handler) *cleanup-context*)
-  obj)
-
-(defun run-cleanup (obj cleanup-fn &optional cleanup-error-handler)
-  ;; (log:info "run-cleanup: ~a ~a ~a" obj cleanup-fn cleanup-error-handler)
-  (if cleanup-error-handler
-      (handler-bind ((error #'(lambda (c) (funcall cleanup-error-handler c))))
-        (funcall cleanup-fn obj))
-      (funcall cleanup-fn obj)))
-
-(defun run-cleanups (cleanups &optional cleanup-error-handler)
-  (flet ((do-run-cleanups (cleanup-list)
-           ;; (log:info "cleanups: ~a" cleanups)
-           (loop :for (obj cleanup-fn cleanup-error-handler) :in cleanup-list
-                 :do (progn (run-cleanup obj cleanup-fn cleanup-error-handler)))))
-    (if cleanup-error-handler
-        (handler-bind ((error #'(lambda (c) (funcall cleanup-error-handler c))))
-          (do-run-cleanups cleanups))
-        (do-run-cleanups cleanups))))
-
-(defun log-and-return-nil-handler (c)
-  (invoke-restart 'log-and-return-nil))
-
-(defmacro with-cleanups-on-error ((&optional (default-cleanup-error-handler-fn #'log-and-return-nil-handler))
-                                  &body body)
-  `(progn
-     (unless *cleanup-context-chain*
-       (setf *cleanup-context-chain* (list)))
-     (setf *cleanup-context* (list))
-     (push *cleanup-context* *cleanup-context-chain*)
-     (unwind-protect
-          (progn
-            (handler-case
-                (progn
-                  ,@body)
-              (error (c)
-                (log:error "Error inside cleanup context: ~a." c)
-                (when *cleanup-context*
-                  (log:warn "Running ~a cleanups" (length *cleanup-context*))
-                  (run-cleanups *cleanup-context*))
-                )))
-       (setf *cleanup-context* (if *cleanup-context-chain* (pop *cleanup-context-chain*) nil)))))
-
-
-(comment
-  (defun lcfn (obj) (log:info "CLEANUP: ~a" obj))
-  (defun ecfn (obj)
-    (restart-case (error "Oh crap! an error!")
-      (return-nil (c) (log:error "ERROR during cleanup: ~a" c) nil)))
-
-  (defun ceh (c)  (invoke-restart 'return-nil c))
-
-  (run-cleanup '(:obj "I need cleanup!") #'lcfn #'ceh)
-  (run-cleanup '(:obj "I need cleanup!") #'ecfn #'ceh)
-
-  (defun test-cleanup-1 (&key (do-error nil))
-    (with-cleanups-on-error ()
-      (let ((obj1 (push-cleanup '(:obj-1 1) #'lcfn #'ceh))
-            (obj2 (push-cleanup '(:obj-2 2) #'lcfn #'ceh))
-            (obj3 (push-cleanup '(:obj-3 3) #'ecfn #'ceh))
-            (obj4 (push-cleanup '(:obj-4 4) #'lcfn #'ceh))
-            )
-        (log:info "objs: ~a" (list obj1 obj2 obj3 obj4))
-
-        (when do-error
-          (log:info "DONE With let objs. Now error!")
-          (error "SOME Silly Error just happened!")))))
-
-
-  (defun test-cleanup-2 (&key (do-error nil))
-    (with-cleanups-on-error ()
-      (test-cleanup-1)
-      (let ((obj5 (push-cleanup '(:obj-5 5) #'lcfn #'ceh))
-            (obj6 (push-cleanup '(:obj-6 6) #'lcfn #'ceh))
-            (obj7 (if do-error
-                      (error "Error in let after 6!")
-                      (push-cleanup '(:obj-7 7) #'ecfn #'ceh)))
-            (obj8 (push-cleanup '(:obj-8 8) #'lcfn #'ceh))
-            )
-        (log:info "objs: ~a" (list obj5 obj6 obj7 obj8))
-
-        ;; (log:info "DONE With let objs. Now error!")
-        ;; (error "SOME Silly Error just happened!")
-        )))
-
-  (test-cleanup-1)
-  (test-cleanup-1 :do-error 1)
-  (test-cleanup-2)
-  (test-cleanup-2 :do-error 2)
-  )
