@@ -1,15 +1,5 @@
 (in-package #:mcclim-sdl2)
 
-(define-enumval-extractor color-type-enum %skia:sk-color-type)
-(define-enumval-extractor surface-origin-enum %skia:gr-surface-origin)
-(define-enumval-extractor clip-op-enum %skia:sk-clip-op)
-
-(define-condition skia-error (error)
-  ((string :initarg :string :initform nil :accessor skia-error-string))
-  (:report (lambda (c s)
-             (with-slots (string) c
-               (format s "Skia Error: ~A" string)))))
-
 (defclass skia-context ()
   ((%native-interface-sp :initform nil :initarg :native-interface-sp :accessor native-interface-sp)
    (%gl-context-sp  :initform nil :initarg :gl-context-sp :accessor gl-context-sp)
@@ -108,18 +98,24 @@
      '%skia:sk-surface+release-context (cffi:null-pointer))))
 
 (defun make-skia-context (width height)
-  (let* ((native-interface-sp (make-native-gl-interface))
-         (gl-context-sp (make-gl-context native-interface-sp))
-         (gl-context (deref-gl-context-sp gl-context-sp))
-         (framebuffer-info (make-framebuffer-info))
-         (backend-render-target (make-backend-render-target-gl width height))
-         (surface-sp (iffi:with-intricate-instances ((surface-props %skia:sk-surface-props))
-                       (make-surface-from-backend-render-target gl-context
-                                                                 backend-render-target
-                                                                 surface-props)))
-         (canvas (%skia:get-canvas '(:pointer %skia:sk-surface) (deref-surface-sp surface-sp)))
-         (skia-ctx (make-instance 'skia-context :native-interface-sp native-interface-sp
-                                                :gl-context-sp gl-context-sp :framebuffer-info framebuffer-info
-                                                :backend-render-target backend-render-target :surface-sp surface-sp
-                                                :canvas canvas)))
-    skia-ctx))
+  (with-cleanups-on-error ()
+      (let* ((native-interface-sp (push-cleanup (make-native-gl-interface) #'unref-native-interface-sp))
+             (gl-context-sp (push-cleanup (make-gl-context native-interface-sp) #'unref-gl-context-sp))
+             (gl-context (deref-gl-context-sp gl-context-sp))
+             (framebuffer-info (push-cleanup (make-framebuffer-info) #'cffi:foreign-free))
+             (backend-render-target (make-backend-render-target-gl width height))
+             (surface-sp (push-cleanup (iffi:with-intricate-instances ((surface-props %skia:sk-surface-props))
+                                         (make-surface-from-backend-render-target gl-context
+                                                                                  backend-render-target
+                                                                                  surface-props))
+                                       #'unref-surface-sp))
+             ;;Canvas lifetime is managed by it's owning surface, so we do not set any cleanups. The
+             ;;canvas will be deallocated when the surface is unref'd
+             (canvas (%skia:get-canvas '(:pointer %skia:sk-surface) (deref-surface-sp surface-sp)))
+             (skia-ctx (make-instance 'skia-context :native-interface-sp native-interface-sp
+                                                    :gl-context-sp gl-context-sp :framebuffer-info framebuffer-info
+                                                    :backend-render-target backend-render-target :surface-sp surface-sp
+                                                    :canvas canvas)))
+        ;;XXX think about copying the cleanups list into a slot in the skia-ctx and just running that
+        ;;when we destroy the skia-ctx
+        skia-ctx)))

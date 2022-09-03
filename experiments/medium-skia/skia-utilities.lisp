@@ -29,6 +29,17 @@
      (define-compiler-macro ,name (value)
        `(enumval ',',enum ,value))))
 
+
+(define-enumval-extractor color-type-enum %skia:sk-color-type)
+(define-enumval-extractor surface-origin-enum %skia:gr-surface-origin)
+(define-enumval-extractor clip-op-enum %skia:sk-clip-op)
+
+(define-condition skia-error (error)
+  ((string :initarg :string :initform nil :accessor skia-error-string))
+  (:report (lambda (c s)
+             (with-slots (string) c
+               (format s "Skia Error: ~A" string)))))
+
 (defmacro check-false (form &optional err-msg)
   (alx:with-gensyms (rc)
     `(let ((,rc ,form))
