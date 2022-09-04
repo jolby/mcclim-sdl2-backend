@@ -1,87 +1,47 @@
-(in-package #:mcclim-sdl2)
+(in-package #:mcclim-skia)
 
-;;; https://skryabiin.wordpress.com/2015/04/25/hello-world/
-;;; http://osdl.sourceforge.net/main/documentation/rendering/SDL-openGL.html#twoDim
+(defmacro comment (&body body)
+  "A macro that ignores its body and does nothing. Useful for
+  comments-by-example.
 
-;;; http://osdl.sourceforge.net/main/documentation/rendering/SDL-threads.html
+  Also, as noted in EXTENSIONS.LISP of 1992, \"This may seem like a
+  silly macro, but used inside of other macros or code generation
+  facilities it is very useful - you can see comments in the (one-time)
+  macro expansion!\""
+  (declare (ignore body)))
 
-(defclass sdl2-medium (basic-medium) ())
-
-(defmethod make-medium ((port sdl2-port) (sheet mirrored-sheet-mixin))
-  (make-instance 'sdl2-medium))
-
-
-;;; https://stackoverflow.com/questions/6172020/opengl-rendering-in-a-secondary-thread
-;;;
-;;; (sdl2:gl-make-current window gl-context) and (sdl2:gl-swap-window window)
-;;; are not thread safe.
-
-(defclass sdl2-window (mirrored-sheet-mixin top-level-sheet-mixin basic-pane) ())
-
-(defvar *sheet* nil)
+(defvar *skia-port* nil)
+(defvar *skia-window* nil)
+(defvar *skia-top-level-sheet* nil)
+(defvar *skia-medium* nil)
 
 (defun toggle-sheet ()
-  (if *sheet*
+  (if *skia-top-level-sheet*
       (progn
-        (destroy-mirror (port *sheet*) *sheet*)
-        (setf *sheet* nil))
+        (destroy-mirror (port *skia-top-level-sheet*) *skia-top-level-sheet*)
+        (setf *skia-top-level-sheet* nil))
       (let* ((port (find-port :server-path :sdl2))
-             (sheet (make-instance 'sdl2-window
+             (sk-tls (make-instance 'sdl2-skia-top-level-sheet
                                    :port port
                                    :region (make-bounding-rectangle 100 100 900 700)
-                                   :pretty-name "My window")))
-        (realize-mirror port sheet)
-        (setf *sheet* sheet))))
+                                   :pretty-name "My Skia Top Level Sheet")))
+        (realize-mirror port sk-tls)
+        (setf *skia-top-level-sheet* sk-tls))))
 
-(defclass sdl2-mirror ()
-  ((window
-    :initarg :window
-    :reader window)
-   (gl-context
-    :initarg :gl-context
-    :reader gl-context)))
-
-(defmethod realize-mirror ((port sdl2-port) (sheet mirrored-sheet-mixin))
-  (with-bounding-rectangle* (x y :width w :height h) sheet
-    (let* ((title (sheet-pretty-name sheet))
-           (window (sdl2:create-window
-                    :title title :flags '(:shown :opengl) :x x :y y :w w :h h))
-           (gl-context (sdl2:gl-create-context window)))
-      (sdl2:gl-make-current window gl-context)
-      (make-instance 'sdl2-mirror :window window :gl-context gl-context))))
-
-(defmethod destroy-mirror ((port sdl2-port) (sheet mirrored-sheet-mixin))
-  (let* ((mirror (sheet-direct-mirror sheet)))
-    (sdl2:gl-delete-context (gl-context mirror))
-    (sdl2:destroy-window (window mirror))))
-
-
-
-
-(defclass test-top-level-sheet
-    (top-level-sheet-mixin mirrored-sheet-mixin basic-sheet)
-  ())
-
-(defun test-window ()
+(defun make-test-window ()
   (let* ((bbox (make-bounding-rectangle 1280 720  1680 1120))
          (port (find-port :server-path :sdl2))
-         (sheet (make-instance 'test-top-level-sheet
+         (win (make-instance 'sdl2-skia-window
                                :region bbox :port port
                                :icon climi::*default-icon-large*)))
-    (realize-mirror port sheet)
-    sheet))
+    (realize-mirror port win)
+    win))
 
-(defparameter *sheet* (test-window))
-(setf (sheet-pretty-name *sheet*) "close request")
-(destroy-mirror (port *sheet*) *sheet*)
-(defun do-it ()
-  (port-set-mirror-name (port *sheet*) *sheet* "Hello world")
+(defun do-test-skia-window ()
+  (port-set-mirror-name (port *skia-window*) *skia-window* "Hello world - Skia Window")
   (port-set-mirror-geometry
-   (port *sheet*) *sheet*
+   (port *skia-window*) *skia-window*
    (make-rectangle* 100 100 600 600)))
-
-
-(do-it)
 
 (defun create-surface (sheet width height)
   (declare (ignore sheet))
@@ -103,11 +63,6 @@
     (sdl2:update-window window)))
 
 
-;; (defvar *my-port* (find-port :server-path :sdl2))
-
-;; (defvar *my-medium*
-;;  (make-medium *my-port* *xxx*))
-
 (defun sdl-color (surface ink)
   (multiple-value-bind (r g b) (color-rgb ink)
     (sdl2:map-rgb (sdl2:surface-format surface)
@@ -123,8 +78,22 @@
       (sdl2:fill-rect surface rect color)
       (sdl2:update-window window))))
 
-;; (sdl-draw-rect *xxx* +deep-pink+ 10 10 90 90)
 
-;; (medium-draw-rectangle* *my-medium* 10 10 90 90 t)
-;; (restart-port (find-port :server-path :sdl2))
+(comment
+  (defvar *skia-port* (find-port :server-path :sdl2))
 
+  (defvar *skia-medium*
+    (make-medium *skia-port* *xxx*))
+
+
+  (sdl-draw-rect *xxx* +deep-pink+ 10 10 90 90)
+  (medium-draw-rectangle* *skia-medium* 10 10 90 90 t)
+  (restart-port (find-port :server-path :sdl2))
+
+  (setf *skia-window* (make-test-window))
+  (setf (sheet-pretty-name *skia-window*) "close request")
+  (destroy-mirror (port *skia-window*) *skia-window*)
+
+
+  (do-test-skia-window)
+  )

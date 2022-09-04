@@ -1,7 +1,7 @@
 ;;; Package definition.
 
-(defpackage #:mcclim-sdl2
-  (:use #:clim-lisp #:clim #:clime #:climb)
+(defpackage #:mcclim-skia
+  (:use #:clim-lisp #:clim #:clime #:climb :mcclim-sdl2)
   (:local-nicknames (#:alx #:alexandria)
                     (#:tch #:lparallel.queue)))
-(in-package #:mcclim-sdl2)
+(in-package #:mcclim-skia)
