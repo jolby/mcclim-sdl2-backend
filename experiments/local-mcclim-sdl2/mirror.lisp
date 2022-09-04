@@ -4,11 +4,18 @@
 ;;; image-mirror-mixin) - the reason for that is that we want to be able to plug
 ;;; an arbitrary renderer that is capable of working with SDL2 (i.e opengl).
 ;;;
+
+
+(defclass mirror-with-sheet-mixin ()
+  ((mirror-sheet :initarg :sheet :accessor mirror-sheet)))
+
+(defclass sdl2-window-handle-mixin ()
+  ((window-id :initarg :id :reader window-id)))
+
 ;;; Ideally the only difference would be creating a different medium class. For
 ;;; now let's ignore this concern and carry on.
-(defclass sdl2-mirror (mcclim-render::image-mirror-mixin)
-  ((window-id :initarg :id :reader window-id)
-   (mirror-sheet :initarg :sheet :accessor mirror-sheet)))
+(defclass sdl2-mirror (mcclim-render::image-mirror-mixin mirror-with-sheet-mixin sdl2-window-handle-mixin)
+  ())
 
 (defmethod initialize-instance :after ((mirror sdl2-mirror) &rest initargs)
   (declare (ignore initargs))

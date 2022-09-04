@@ -88,6 +88,10 @@
 
   (sdl-draw-rect *xxx* +deep-pink+ 10 10 90 90)
   (medium-draw-rectangle* *skia-medium* 10 10 90 90 t)
+
+
+  (toggle-sheet)
+
   (restart-port (find-port :server-path :sdl2))
 
   (setf *skia-window* (make-test-window))

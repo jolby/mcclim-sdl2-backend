@@ -17,12 +17,14 @@
   (with-bounding-rectangle* (x y :width w :height h) sheet
     (let* ((title (sheet-pretty-name sheet))
            (window (sdl2:create-window
-                    :title title :flags '(:shown :opengl) :x x :y y :w w :h h))
+                    :title title :flags '(:shown :opengl)
+                    :x x :y y :w w :h h))
+           (id (sdl2-ffi.functions:sdl-get-window-id window))
            (gl-context (make-gl-context-for-window window))
            (skia-context (make-skia-context w h)))
       (sdl2:gl-make-current window gl-context)
-      (make-instance 'sdl2-skia-mirror :sheet sheet :window window
-                                       :gl-context gl-context :skia-context skia-context))))
+      (make-instance 'sdl2-opengl-skia-mirror :sheet sheet :window window :id id
+                                              :gl-context gl-context :skia-context skia-context))))
 
 (mcclim-sdl2::define-sdl2-request destroy-skia-window (sheet)
   (let* ((mirror (sheet-direct-mirror sheet)))

@@ -4,9 +4,9 @@
                                           :buffer-size 24 :depth-size 0 :stencil-size 8 :doublebuffer 1
                                           :share-with-current-context 1 :context-major-version 4 :context-minor-version 6
                                           :context-profile-mask (autowrap:enum-value 'sdl2-ffi:sdl-glprofile :core)))
-(defclass sdl2-opengl-mirror ()
-  ((mirror-sheet :initarg :sheet :accessor mirror-sheet)
-   (window :initarg :window :accessor window)
+
+(defclass sdl2-opengl-mirror (mcclim-sdl2::mirror-with-sheet-mixin mcclim-sdl2::sdl2-window-handle-mixin)
+  ((window :initarg :window :accessor window)
    (gl-context :initarg :gl-context :accessor gl-context)))
 
 (defclass opengl-mirrored-sheet-mixin (mirrored-sheet-mixin) ())
@@ -24,17 +24,22 @@
     (sdl2:gl-create-context window))
 
 (defun %search-for-context (window context-profile-mask)
-  (let ((context nil))
+  (let ((context nil)
+        (major-version nil)
+        (minor-version nil))
     (loop :for (major minor) :in `((4 6) (4 5) (4 4) (4 3)
                                    (4 2) (4 1) (4 0) (3 3))
           :until context
           :do (handler-case
                   (progn
+                    (setf major-version major
+                          minor-version minor)
                     (sdl2:gl-set-attr :context-profile-mask context-profile-mask)
                     (sdl2:gl-set-attr :context-major-version major)
                     (sdl2:gl-set-attr :context-minor-version minor)
                     (setf context (sdl2:gl-create-context window)))
                 (error () (log:error "Unable to create context: ~a.~a" major minor))))
+    (log:info "Created context maj/min: ~a.~a" major-version minor-version)
     context))
 
 (defun make-gl-context-for-window (window &key
@@ -62,16 +67,17 @@
     (assert context ()
             "McCLIM mirror skia. Unable to create suitable OpenGL context.
 Your machine must support at least GL 3.3")
-    (values context surface)))
+    (values context window)))
 
 (mcclim-sdl2::define-sdl2-request create-opengl-window-for-sheet (sheet)
   (with-bounding-rectangle* (x y :width w :height h) sheet
     (let* ((title (sheet-pretty-name sheet))
            (window (sdl2:create-window
                     :title title :flags '(:shown :opengl) :x x :y y :w w :h h))
+           (id (sdl2-ffi.functions:sdl-get-window-id window))
            (gl-context (make-gl-context-for-window window)))
       (sdl2:gl-make-current window gl-context)
-      (make-instance 'sdl2-opengl-mirror :sheet sheet :window window :gl-context gl-context))))
+      (make-instance 'sdl2-opengl-mirror :sheet sheet :window window :id id :gl-context gl-context))))
 
 (mcclim-sdl2::define-sdl2-request destroy-opengl-window (sheet)
   (let* ((mirror (sheet-direct-mirror sheet)))
@@ -82,7 +88,7 @@ Your machine must support at least GL 3.3")
 
 (defmethod realize-mirror ((port mcclim-sdl2::sdl2-port) (sheet sdl2-opengl-window))
   (with-bounding-rectangle* (x y :width w :height h) sheet
-    (let ((mirror (create-opengl-window-for-sheet sheet :synchronize t))
+    (let* ((mirror (create-opengl-window-for-sheet sheet :synchronize t))
           (id (sdl2-ffi.functions:sdl-get-window-id (window mirror)))
           (native-region (make-rectangle* 0 0 w h))
           (native-transformation (make-translation-transformation (- x) (- y))))
