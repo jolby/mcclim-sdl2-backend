@@ -109,7 +109,7 @@
                                                                                   backend-render-target
                                                                                   surface-props))
                                        #'unref-surface-sp))
-             ;;Canvas lifetime is managed by it's owning surface, so we do not set any cleanups. The
+             ;;Canvas lifetime is managed by its owning surface, so we do not set any cleanups. The
              ;;canvas will be deallocated when the surface is unref'd
              (canvas (%skia:get-canvas '(:pointer %skia:sk-surface) (deref-surface-sp surface-sp)))
              (skia-ctx (make-instance 'skia-context :native-interface-sp native-interface-sp
@@ -119,3 +119,10 @@
         ;;XXX think about copying the cleanups list into a slot in the skia-ctx and just running that
         ;;when we destroy the skia-ctx
         skia-ctx)))
+
+(defun destroy-skia-context (skia-context)
+  (with-slots (native-interface-sp gl-context-sp framebuffer-info surface-sp) skia-context
+    (when surface-sp (unref-surface-sp surface-sp))
+    (when framebuffer-info (cffi:foreign-free framebuffer-info))
+    (when gl-context-sp (unref-gl-context-sp gl-context-sp))
+    (when native-interface-sp (unref-native-interface-sp native-interface-sp))))

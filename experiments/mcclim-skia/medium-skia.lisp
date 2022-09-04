@@ -1,6 +1,6 @@
 (in-package #:mcclim-skia)
 
-(defclass sdl2-medium (basic-medium) ())
+(defclass skia-medium (basic-medium) ())
 
-(defmethod make-medium ((port sdl2-port) (sheet mirrored-sheet-mixin))
-  (make-instance 'sdl2-medium))
+(defmethod make-medium ((port mcclim-sdl2::sdl2-port) (sheet skia-mirrored-sheet-mixin))
+  (make-instance 'skia-medium))

@@ -6,7 +6,8 @@
   :depends-on ("mcclim" "sdl2" "mcclim-sdl2" "log4cl" "lparallel" "cl-opengl" "aw-skia")
   :serial t
   :components ((:file "packages")
-               (:file "skia-utilities")
+               (:file "utilities")
                (:file "skia-context")
+               (:file "mirror-opengl")
                (:file "mirror-skia")
                (:file "medium-skia")))
