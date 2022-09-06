@@ -4,3 +4,4 @@
 **/*.log
 system-index.txt
 /tmp/
+/experiments/mcclim-skia/tmp/

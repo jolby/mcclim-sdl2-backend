@@ -14,7 +14,8 @@
 
 ;;; Ideally the only difference would be creating a different medium class. For
 ;;; now let's ignore this concern and carry on.
-(defclass sdl2-mirror (mcclim-render::image-mirror-mixin mirror-with-sheet-mixin sdl2-window-handle-mixin)
+(defclass sdl2-mirror (mcclim-render::image-mirror-mixin
+                       mirror-with-sheet-mixin sdl2-window-handle-mixin)
   ())
 
 (defmethod initialize-instance :after ((mirror sdl2-mirror) &rest initargs)

@@ -8,10 +8,13 @@
   :serial t
   :components ((:file "packages")
                (:file "utilities")
+               (:file "skia-types")
                (:file "skia-context")
                (:file "mirror-opengl")
+               (:file "skia-sheet")
                (:file "mirror-skia")
-               (:file "medium-skia")))
+               (:file "medium-skia")
+               ))
 
 (asdf:defsystem #:mcclim-sdl2-skia/blob
   :description "skia runtime blob for linux"

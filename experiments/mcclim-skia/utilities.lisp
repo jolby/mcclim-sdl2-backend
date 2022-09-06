@@ -1,4 +1,14 @@
-(in-package #:mcclim-skia)
+(in-package #:skia-core)
+
+(defmacro comment (&body body)
+  "A macro that ignores its body and does nothing. Useful for
+  comments-by-example.
+
+  Also, as noted in EXTENSIONS.LISP of 1992, \"This may seem like a
+  silly macro, but used inside of other macros or code generation
+  facilities it is very useful - you can see comments in the (one-time)
+  macro expansion!\""
+  (declare (ignore body)))
 
 (defun enumval (enum value)
   (if (integerp value)
@@ -21,18 +31,12 @@
       (t whole))
     whole))
 
-
 (defmacro define-enumval-extractor (name enum)
   `(progn
      (defun ,name (value)
        (enumval ',enum value))
      (define-compiler-macro ,name (value)
        `(enumval ',',enum ,value))))
-
-
-(define-enumval-extractor color-type-enum %skia:sk-color-type)
-(define-enumval-extractor surface-origin-enum %skia:gr-surface-origin)
-(define-enumval-extractor clip-op-enum %skia:sk-clip-op)
 
 (define-condition skia-error (error)
   ((string :initarg :string :initform nil :accessor skia-error-string))

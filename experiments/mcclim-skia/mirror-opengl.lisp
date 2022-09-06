@@ -5,7 +5,8 @@
                                           :share-with-current-context 1 :context-major-version 4 :context-minor-version 6
                                           :context-profile-mask (autowrap:enum-value 'sdl2-ffi:sdl-glprofile :core)))
 
-(defclass sdl2-opengl-mirror (mcclim-sdl2::mirror-with-sheet-mixin mcclim-sdl2::sdl2-window-handle-mixin)
+(defclass sdl2-opengl-mirror (mcclim-sdl2::mirror-with-sheet-mixin
+                              mcclim-sdl2::sdl2-window-handle-mixin)
   ((window :initarg :window :accessor window)
    (gl-context :initarg :gl-context :accessor gl-context)))
 
@@ -67,13 +68,13 @@
     (assert context ()
             "McCLIM mirror skia. Unable to create suitable OpenGL context.
 Your machine must support at least GL 3.3")
-    (values context window)))
+    context))
 
 (mcclim-sdl2::define-sdl2-request create-opengl-window-for-sheet (sheet)
   (with-bounding-rectangle* (x y :width w :height h) sheet
     (let* ((title (sheet-pretty-name sheet))
            (window (sdl2:create-window
-                    :title title :flags '(:shown :opengl) :x x :y y :w w :h h))
+                    :title title :flags '(:shown :opengl :resizable) :x x :y y :w w :h h))
            (id (sdl2-ffi.functions:sdl-get-window-id window))
            (gl-context (make-gl-context-for-window window)))
       (sdl2:gl-make-current window gl-context)
@@ -89,9 +90,9 @@ Your machine must support at least GL 3.3")
 (defmethod realize-mirror ((port mcclim-sdl2::sdl2-port) (sheet sdl2-opengl-window))
   (with-bounding-rectangle* (x y :width w :height h) sheet
     (let* ((mirror (create-opengl-window-for-sheet sheet :synchronize t))
-          (id (sdl2-ffi.functions:sdl-get-window-id (window mirror)))
-          (native-region (make-rectangle* 0 0 w h))
-          (native-transformation (make-translation-transformation (- x) (- y))))
+           (id (sdl2-ffi.functions:sdl-get-window-id (window mirror)))
+           (native-region (make-rectangle* 0 0 w h))
+           (native-transformation (make-translation-transformation (- x) (- y))))
       (alx:when-let ((icon (sheet-icon sheet)))
         (mcclim-sdl2::change-window-icon id (alx:ensure-car icon)))
       (setf (climi::%sheet-native-region sheet) native-region

@@ -1,14 +1,5 @@
 (in-package #:mcclim-skia)
 
-(defmacro comment (&body body)
-  "A macro that ignores its body and does nothing. Useful for
-  comments-by-example.
-
-  Also, as noted in EXTENSIONS.LISP of 1992, \"This may seem like a
-  silly macro, but used inside of other macros or code generation
-  facilities it is very useful - you can see comments in the (one-time)
-  macro expansion!\""
-  (declare (ignore body)))
 
 (defvar *skia-port* nil)
 (defvar *skia-window* nil)
@@ -80,7 +71,10 @@
 
 
 (comment
-  (defvar *skia-port* (find-port :server-path :sdl2))
+  (setf *skia-port* (find-port :server-path :sdl2))
+  (destroy-port (find-port :server-path :sdl2))
+
+  (progn (destroy-port *skia-port*) (setf *skia-port* nil))
 
   (defvar *skia-medium*
     (make-medium *skia-port* *xxx*))
