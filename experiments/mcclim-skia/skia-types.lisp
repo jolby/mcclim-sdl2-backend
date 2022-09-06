@@ -36,12 +36,16 @@
   `(iffi:with-intricate-instance (,paint-sym '%skia:sk-paint)
     ,@body))
 
-(defun set-paint-color (paint r g b a)
+(defun set-paint-color4f (paint r g b a)
   (with-color4f (c4f r g b a)
     (%skia:set-color
      '(claw-utils:claw-pointer %skia:sk-paint) paint
      '(claw-utils:claw-pointer %skia:sk-color4f) c4f
      '(claw-utils:claw-pointer %skia:sk-color-space) (cffi:null-pointer))))
+
+(defun set-paint-color32argb (paint c)
+  (%skia:set-color '(:pointer %skia::sk-paint) paint
+                   '%skia::sk-color c))
 
 (defun set-rectangle-xywh (rect x y w h)
   (%skia:set-xywh

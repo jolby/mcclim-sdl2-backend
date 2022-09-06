@@ -5,7 +5,7 @@
     :initarg :skia-context
     :accessor skia-context)))
 
-(mcclim-sdl2::define-sdl2-request create-skia-window-for-sheet (sheet)
+(mcclim-sdl2::define-sdl2-request create-skia-mirror-for-sheet (sheet)
   (with-bounding-rectangle* (x y :width w :height h) sheet
     (let* ((title (sheet-pretty-name sheet))
            (window (sdl2:create-window
@@ -30,7 +30,7 @@
 (defmethod realize-mirror ((port mcclim-sdl2::sdl2-port) (sheet sdl2-skia-top-level-sheet))
   (with-bounding-rectangle* (x y :width w :height h) sheet
     (log:info "REALIZE: w: ~a, h: ~a sheet: ~a" w h sheet)
-    (let* ((mirror (create-skia-window-for-sheet sheet :synchronize t))
+    (let* ((mirror (create-skia-mirror-for-sheet sheet :synchronize t))
           (id (sdl2-ffi.functions:sdl-get-window-id (window mirror)))
           (native-region (make-rectangle* 0 0 w h))
           (native-transformation (make-translation-transformation (- x) (- y))))
@@ -38,9 +38,8 @@
         (mcclim-sdl2::change-window-icon id (alx:ensure-car icon)))
       (setf (climi::%sheet-native-region sheet) native-region
             (climi::%sheet-native-transformation sheet) native-transformation
-            (mcclim-sdl2::id->mirror port id) mirror)
-      mirror)))
+            (mcclim-sdl2::id->mirror port id) mirror))))
 
-(defmethod destroy-mirror ((port mcclim-sdl2::sdl2-port) (sheet sdl2-skia-top-level-sheet))
+(defmethod destroy-mirror ((port mcclim-sdl2::sdl2-port) (sheet skia-mirrored-sheet-mixin))
   (destroy-skia-window sheet))
 

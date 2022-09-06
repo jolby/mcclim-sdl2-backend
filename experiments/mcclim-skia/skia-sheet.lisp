@@ -1,5 +1,14 @@
 (in-package #:mcclim-skia)
 
+(defmacro comment (&body body)
+  "A macro that ignores its body and does nothing. Useful for
+  comments-by-example.
+
+  Also, as noted in EXTENSIONS.LISP of 1992, \"This may seem like a
+  silly macro, but used inside of other macros or code generation
+  facilities it is very useful - you can see comments in the (one-time)
+  macro expansion!\""
+  (declare (ignore body)))
 ;;; A complete sheet should subclass basic-sheet and pick its mixins:
 ;;;
 ;;;   Input protocol (xor):
@@ -75,17 +84,6 @@
                      :pretty-name "McCLIM Skia Test Sheet"
                      :region (make-rectangle* -200 -200 1080 720)))
 
-(defun simple-draw (sheet)
-  (let ((medium sheet))
-    (with-bounding-rectangle* (x1 y1 x2 y2) medium
-      (medium-clear-area medium x1 y1 x2 y2)
-      (draw-rectangle* medium (+ x1 10) (+ y1 10) (- x2 10) (- y2 10)
-                       :ink +deep-sky-blue+)
-      (draw-circle* medium 0 0 25 :ink (alexandria:random-elt
-                                        (make-contrasting-inks 8)))
-                                        ;(draw-text* medium "(0,0)" 0 0)
-                                        ;(sleep 1)
-      (medium-finish-output sheet))))
 
 (defmethod handle-event ((sheet skia-app-sheet) event)
   (log:info "Unhandled event ~s has arrived." (class-name (class-of event))))
@@ -131,17 +129,17 @@
   (simple-draw *skia-sheet*))
 
 (comment
-  (defparameter *skia-sheet* (open-skia-sheet :sdl2 t))
-
-  (close-skia-sheet *skia-sheet*)
 
   (defparameter *skia-port* (find-port :server-path :sdl2))
   (defparameter *new-sheet* (make-instance 'skia-app-sheet :port *skia-port*))
 
+  (defparameter *skia-sheet* (open-skia-sheet :sdl2 t))
   (let ((result (do-simple-draw :synchronize t)))
     (if (typep result 'condition)
         (error result)
         'done))
+  (close-skia-sheet *skia-sheet*)
+
 )
 ;; (setf *xxx* (open-plain-sheet :sdl2))
 

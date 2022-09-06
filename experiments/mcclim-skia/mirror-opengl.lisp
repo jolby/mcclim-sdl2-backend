@@ -70,7 +70,7 @@
 Your machine must support at least GL 3.3")
     context))
 
-(mcclim-sdl2::define-sdl2-request create-opengl-window-for-sheet (sheet)
+(mcclim-sdl2::define-sdl2-request create-opengl-mirror-for-sheet (sheet)
   (with-bounding-rectangle* (x y :width w :height h) sheet
     (let* ((title (sheet-pretty-name sheet))
            (window (sdl2:create-window
@@ -89,7 +89,7 @@ Your machine must support at least GL 3.3")
 
 (defmethod realize-mirror ((port mcclim-sdl2::sdl2-port) (sheet sdl2-opengl-window))
   (with-bounding-rectangle* (x y :width w :height h) sheet
-    (let* ((mirror (create-opengl-window-for-sheet sheet :synchronize t))
+    (let* ((mirror (create-opengl-mirror-for-sheet sheet :synchronize t))
            (id (sdl2-ffi.functions:sdl-get-window-id (window mirror)))
            (native-region (make-rectangle* 0 0 w h))
            (native-transformation (make-translation-transformation (- x) (- y))))

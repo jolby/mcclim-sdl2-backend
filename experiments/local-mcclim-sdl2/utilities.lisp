@@ -114,7 +114,8 @@
 
 (defun sdl2-window (window-id)
   (let ((window (sdl2-ffi.functions:sdl-get-window-from-id
-                 (if (typep window-id 'sdl2-mirror)
+                 (if ;;(typep window-id 'sdl2-mirror)
+                  (typep window-id 'sdl2-window-handle-mixin)
                      (window-id window-id)
                      window-id))))
     (if (autowrap:wrapper-null-p window)

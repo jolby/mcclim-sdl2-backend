@@ -1,0 +1,31 @@
+* Introduction
+This is a mashup of Pavel Korlev's (borodust) aw-skia, the skia parts in alien-works and McCLIM.
+
+* Skia/Lisp type puns
+| Skia Type | Decayed C type | Lisp cffi type |
+|-----------+----------------+----------------|
+| SkColor   | uint32_t       | u32            |
+| SkColor4f | array-of-float | f32 x 4        |
+
+* Notes
+** McCLIM event heirarchy
+event
+  device-event
+    keyboard-event
+      key-press-event
+      key-release-event
+    pointer-event
+      pointer-button-event
+      pointer-button-press-event
+      pointer-button-release-event
+      pointer-button-hold-event
+      pointer-motion-event
+      pointer-boundary-event
+      pointer-enter-event
+      pointer-exit-event
+  window-event
+    window-configuration-event
+    window-repaint-event
+    window-manager-event
+    window-manager-delete-event
+  timer-event
