@@ -141,32 +141,3 @@
   (close-skia-sheet *skia-sheet*)
 
 )
-;; (setf *xxx* (open-plain-sheet :sdl2))
-
-;;(sheet-disown-child (sheet-parent *xxx*) *xxx*)
-
-;;(open-plain-sheet :clx-ttf)
-;; (testme *xxx*)
-;; (defun testme (sheet)
-;;   ;; (let ((window (sdl2-window (sheet-mirror sheet))))
-;;   ;;   (sdl2:get-window-surface window)
-;;   ;;   (sdl2:update-window window))
-;;   ;; #+ (or)
-;;   (let* ((surface (create-surface sheet 100 100))
-;;          (window (sdl2-window (sheet-mirror sheet)))
-;;          (target (sdl2:get-window-surface window)))
-;;     (update-surface surface *glider*)
-;;     (blit-surface surface target)
-;;     (destroy-surface surface)
-;;     (sdl2:update-window window)))
-
-;; (testme *xxx*)
-
-;; ;;; FIXME CLX assumes that all sheet are panes (i.e calls compose-space)
-;; ;; (defvar *yyy* (open-plain-sheet :clx-ttf))
-
-
-;; ;; (setf (sheet-pretty-name *xxx*)
-;; ;;       "Justysianka Mazuranka Kochanka")
-
-;; ;; (destroy-mirror (port *xxx*) *xxx*)
