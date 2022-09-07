@@ -18,14 +18,26 @@
       (make-instance 'sdl2-opengl-skia-mirror :sheet sheet :window window :id id
                                               :gl-context gl-context :skia-context skia-context))))
 
+(defun %destroy-sdl2-opengl-skia-mirror (mirror)
+  (skia-core:destroy-skia-context (skia-context mirror))
+  (sdl2:gl-delete-context (gl-context mirror))
+  (sdl2:destroy-window (window mirror))
+  (log:info "DONE destroy-skia-window: mirror: ~a" mirror)
+  (setf (gl-context mirror) nil
+        (window mirror) nil
+        (skia-context mirror) nil))
+
+(mcclim-sdl2::define-sdl2-request destroy-skia-mirror (mirror)
+  (unless mirror (error "No sdl2-opengl-skia-mirror provided!"))
+    (%destroy-sdl2-opengl-skia-mirror mirror))
+
 (mcclim-sdl2::define-sdl2-request destroy-skia-window (sheet)
-  (let* ((mirror (sheet-direct-mirror sheet)))
-    (skia-core:destroy-skia-context (skia-context mirror))
-    (sdl2:gl-delete-context (gl-context mirror))
-    (sdl2:destroy-window (window mirror))
-    (setf (gl-context mirror) nil
-          (window mirror) nil
-          (skia-context mirror) nil)))
+  (log:info "BEGIN destroy-skia-window: mirror: ~a, sheet: ~a" (sheet-direct-mirror sheet) sheet)
+  (alx:when-let ((mirror (sheet-direct-mirror sheet)))
+    ;; (break)
+    (%destroy-sdl2-opengl-skia-mirror mirror)
+    ))
+
 
 (defmethod realize-mirror ((port mcclim-sdl2::sdl2-port) (sheet sdl2-skia-top-level-sheet))
   (with-bounding-rectangle* (x y :width w :height h) sheet
@@ -40,6 +52,8 @@
             (climi::%sheet-native-transformation sheet) native-transformation
             (mcclim-sdl2::id->mirror port id) mirror))))
 
-(defmethod destroy-mirror ((port mcclim-sdl2::sdl2-port) (sheet skia-mirrored-sheet-mixin))
+(defmethod destroy-mirror ((port mcclim-sdl2::sdl2-port) (sheet sdl2-skia-top-level-sheet))
   (destroy-skia-window sheet))
 
+(defmethod destroy-mirror ((port mcclim-sdl2::sdl2-port) (mirror sdl2-opengl-skia-mirror))
+  (destroy-skia-mirror mirror))

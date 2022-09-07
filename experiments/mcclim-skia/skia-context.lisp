@@ -121,8 +121,8 @@
         skia-ctx)))
 
 (defun destroy-skia-context (skia-context)
-  (with-slots (native-interface-sp gl-context-sp framebuffer-info surface-sp) skia-context
-    (when surface-sp (unref-surface-sp surface-sp))
-    (when framebuffer-info (cffi:foreign-free framebuffer-info))
-    (when gl-context-sp (unref-gl-context-sp gl-context-sp))
-    (when native-interface-sp (unref-native-interface-sp native-interface-sp))))
+  (with-slots (%native-interface-sp %gl-context-sp %framebuffer-info %surface-sp) skia-context
+    (when %surface-sp (unref-surface-sp %surface-sp))
+    (when %framebuffer-info (cffi:foreign-free %framebuffer-info))
+    (when %gl-context-sp (unref-gl-context-sp %gl-context-sp))
+    (when %native-interface-sp (unref-native-interface-sp %native-interface-sp))))

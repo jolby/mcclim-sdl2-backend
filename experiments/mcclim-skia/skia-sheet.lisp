@@ -94,8 +94,8 @@
                        :ink +deep-sky-blue+)
       (draw-circle* medium 0 0 25 :ink (alexandria:random-elt
                                         (make-contrasting-inks 8)))
-                                        ;(draw-text* medium "(0,0)" 0 0)
-                                        ;(sleep 1)
+      ;;(draw-text* medium "(0,0)" 0 0)
+      ;;(sleep 1)
       (medium-finish-output sheet))))
 
 (defmethod handle-event ((sheet skia-app-sheet) event)
@@ -113,8 +113,20 @@
   (repaint-sheet sheet +everywhere+))
 
 (defmethod handle-event ((sheet skia-app-sheet) (event window-manager-delete-event))
-  (let ((mirror (sheet-direct-mirror sheet)))
-    (destroy-mirror (port sheet) mirror)))
+  (log:info "DELETE. sheet: ~a. (sheet-direct-mirror sheet) ==> ~a"
+            sheet (sheet-direct-mirror sheet))
+  ;;This works: I think by avoiding going through the SDL request
+  ;;mechanism. That should be okay because event handlers should be being called
+  ;;on the SDL thread anyways (I think...)
+  (alx:when-let ((mirror (sheet-direct-mirror sheet)))
+    (%destroy-sdl2-opengl-skia-mirror mirror))
+
+  ;; (break)
+  ;; XXX this gets called twice. Why??
+  ;; (destroy-mirror (port sheet) sheet)
+  ;; (alx:when-let ((mirror (sheet-direct-mirror sheet)))
+  ;;   (destroy-mirror (port sheet) mirror))
+  )
 
 (defmethod handle-event ((sheet skia-app-sheet) (event window-repaint-event))
   (handle-repaint sheet (window-event-region event)))
@@ -123,34 +135,49 @@
   (log:warn "Repainting a window (region ~s)." region)
   (simple-draw sheet))
 
+
+(defparameter *skia-port* nil)
+(defparameter *skia-mirror* nil)
+(defparameter *skia-sheet* nil)
+
 (defun open-skia-sheet (path &optional restartp)
   (let ((port (find-port :server-path path)))
     (when restartp
       (restart-port port))
-    (let (;; Supplying :PORT here is a kludge in the core.
+    (setf *skia-port* port)
+    (let* (;; Supplying :PORT here is a kludge in the core.
           (sheet (make-instance 'skia-app-sheet :port port))
-          (graft (find-graft :port port)))
-      (realize-mirror port sheet)
+          (graft (find-graft :port port))
+          (mirror (realize-mirror port sheet)))
       (sheet-adopt-child graft sheet)
-      sheet)))
+      (setf *skia-mirror* mirror
+            *skia-sheet* sheet))))
 
 (defun close-skia-sheet (sheet)
   (sheet-disown-child (graft sheet) sheet))
 
-
-(mcclim-sdl2::define-sdl2-request do-simple-draw ()
+(mcclim-sdl2::define-sdl2-request do-simple-draw (sheet)
   (simple-draw *skia-sheet*))
+
+(defun nuke-state ()
+  (when *skia-sheet* (destroy-mirror *skia-port* *skia-sheet*) (setf *skia-sheet* nil))
+  (when *skia-mirror* (destroy-mirror *skia-port* *skia-mirror*) (setf *skia-mirror* nil))
+  (when *skia-port* (destroy-port *skia-port*) (setf *skia-port* nil)))
 
 (comment
 
-  (defparameter *skia-port* (find-port :server-path :sdl2))
-  (defparameter *new-sheet* (make-instance 'skia-app-sheet :port *skia-port*))
 
+  (defparameter *skia-port* (find-port :server-path :sdl2))
+  (defparameter *skia-sheet* (make-instance 'skia-app-sheet :port *skia-port*))
   (defparameter *skia-sheet* (open-skia-sheet :sdl2 t))
-  (let ((result (do-simple-draw :synchronize t)))
+
+  (open-skia-sheet :sdl2 t)
+  (let ((result (do-simple-draw *skia-sheet* :synchronize t)))
     (if (typep result 'condition)
         (error result)
         'done))
+  (sheet-direct-mirror *skia-sheet*)
   (close-skia-sheet *skia-sheet*)
-
+  (nuke-state)
+  (destroy-port (find-port :server-path :sdl2))
 )

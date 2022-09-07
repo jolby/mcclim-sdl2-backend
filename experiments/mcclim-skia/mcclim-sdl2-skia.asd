@@ -9,6 +9,7 @@
   :components ((:file "packages")
                (:file "utilities")
                (:file "skia-types")
+               (:file "skia-canvas")
                (:file "skia-context")
                (:file "mirror-opengl")
                (:file "skia-sheet")

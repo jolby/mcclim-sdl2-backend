@@ -57,6 +57,8 @@
 (defmethod destroy-mirror ((port sdl2-port) (sheet mirrored-sheet-mixin))
   (let* ((mirror (sheet-direct-mirror sheet))
          (window-id (window-id mirror)))
+    (log:info "DESTROY-mirror sheet: ~a, mirror: ~a, window-id: ~a"
+              sheet mirror window-id)
     (destroy-window window-id)
     (setf (id->mirror port window-id) nil)))
 
@@ -195,4 +197,10 @@
   (let ((window (sdl2-window (window-id (sheet-mirror sheet)))))
     ;; FIXME check returned values for errors.
     (sdl2-ffi.functions:sdl-get-window-surface window)
-    (sdl2-ffi.functions:sdl-update-window-surface window)))
+    (sdl2-ffi.functions:sdl-update-window-surface window)
+
+    ;; (list )
+    (make-instance 'window-repaint-event
+                         :timestamp stamp
+                         :sheet sheet
+                         :region clim:+everywhere+) ))
