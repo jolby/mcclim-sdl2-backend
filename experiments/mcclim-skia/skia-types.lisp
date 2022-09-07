@@ -4,6 +4,14 @@
 (define-enumval-extractor surface-origin-enum %skia:gr-surface-origin)
 (define-enumval-extractor clip-op-enum %skia:sk-clip-op)
 (define-enumval-extractor paint-style-enum %skia:sk-paint+style)
+(define-enumval-extractor path-add-mode-enum %skia::sk-path+add-mode)
+(define-enumval-extractor path-arc-size-mode-enum %skia::sk-path+arc-size)
+(define-enumval-extractor path-segment-mask-num %skia::sk-path-segment-mask)
+(define-enumval-extractor path-direction-enum %skia::sk-path-direction)
+(define-enumval-extractor path-first-direction-enum %skia::sk-path-first-direction)
+(define-enumval-extractor path-fill-type-enum %skia::sk-path-fill-type)
+(define-enumval-extractor path-convexity-enum %skia::sk-path-convexity)
+(define-enumval-extractor path-verb-enum %skia::sk-path-verb)
 
 (defun set-color4f (color4f r g b a)
   (iffi:with-intricate-slots
@@ -46,6 +54,43 @@
 (defun set-paint-color32argb (paint c)
   (%skia:set-color '(:pointer %skia::sk-paint) paint
                    '%skia::sk-color c))
+
+(defun set-paint-anti-alias (paint &optional (antialias t))
+  (%skia:set-anti-alias '(:pointer %skia::sk-paint) paint
+                        :bool antialias))
+
+(defun set-paint-stroke (paint &optional (stroke t))
+  (%skia:set-stroke '(:pointer %skia::sk-paint) paint
+                          :bool stroke))
+(defun set-paint-stroke-width (paint width)
+  (%skia:set-stroke-width
+   '(:pointer %skia::sk-paint) paint
+   '%skia:sk-scalar (float width 1f0)))
+
+(defun set-paint-style (paint style)
+  (%skia:set-style
+   '(:pointer %skia::sk-paint) paint
+   '%skia:sk-paint+style style))
+
+;;
+;; Geometric objects
+;;
+;;
+(defun set-point-xy (point x y)
+  (iffi:with-intricate-slots
+      %skia:sk-point
+      ((px %skia:f-x)
+       (py %skia:f-y))
+      point
+    (setf px (float x 0f0)
+          py (float y 0f0))))
+
+(defun make-point (x y)
+  (let ((p (iffi:make-intricate-instance '%skia:sk-point)))
+    (set-point-xy p x y)))
+
+(defun destroy-point (p)
+  (iffi:destroy-intricate-instance '%skia:sk-point p))
 
 (defun set-rectangle-xywh (rect x y w h)
   (%skia:set-xywh
@@ -91,6 +136,59 @@
           (progn ,@body)
        (destroy-i-rectangle ,irect-sym))))
 
-(defun make-rounded-rectangle (x y w h rad)
+(defun make-rounded-rectangle (x y w h x-rad y-rad)
   (with-rectangle (rect x y w h)
-    (let ((rrect (iffi:make-intricate-instance '%skia:sk-r-rect))))))
+    (let ((rrect (iffi:make-intricate-instance '%skia:sk-r-rect)))
+      (%skia:sk-r-rect+make-rect-xy
+       '(:pointer %skia:sk-r-rect) rrect
+       '(:pointer %skia:sk-rect) rect
+       '%skia:sk-scalar (float x-rad 0f0)
+       '%skia:sk-scalar (float y-rad 0f0))
+      rrect)))
+
+;;XXX maybe just use rr with zero xy rads?
+(defun make-rounded-rectangle-zero-radius (x y w h)
+  (with-rectangle (rect x y w h)
+    (let ((rrect (iffi:make-intricate-instance '%skia:sk-r-rect)))
+      (%skia:sk-r-rect+make-rect
+       '(:pointer %skia:sk-r-rect) rrect
+       '(:pointer %skia:sk-rect) rect)
+      rrect)))
+
+(defun make-oval (x y w h)
+  (with-rectangle (rect x y w h)
+    (let ((rrect (iffi:make-intricate-instance '%skia:sk-r-rect)))
+      (%skia:sk-r-rect+make-oval
+       '(:pointer %skia:sk-r-rect) rrect
+       '(:pointer %skia:sk-rect) rect)
+      rrect)))
+
+(defun make-circle (x y diameter)
+  (make-oval x y diameter diameter))
+
+(defun make-path ()
+  (iffi:make-intricate-instance '%skia:sk-path))
+
+(defun make-path-from-circle (center-x center-y radius
+                              &key
+                                (path-direction :cw)
+                                (append-to nil))
+  (%skia:sk-path+circle
+   '(:pointer %skia:sk-path) (or append-to (make-path))
+   '%skia:sk-scalar (float center-x 0f0)
+   '%skia:sk-scalar (float center-y 0f0)
+   '%skia:sk-scalar (float radius 0f0)
+   '%skia:sk-path-direction path-direction))
+
+(defun move-to (path x y)
+  (%skia:move-to '(:pointer %skia:sk-path) path
+                 '%skia:sk-scalar (float x 0f0)
+                 '%skia:sk-scalar (float y 0f0)))
+
+(defun line-to (path x1 y1)
+  (%skia:line-to '(:pointer %skia:sk-path) path
+                 '%skia:sk-scalar (float x1 0f0)
+                 '%skia:sk-scalar (float y1 0f0)))
+
+(defun path-close (path)
+  (%skia:close '(:pointer %skia:sk-path) path))

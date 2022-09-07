@@ -115,6 +115,7 @@
 (defmethod handle-event ((sheet skia-app-sheet) (event window-manager-delete-event))
   (log:info "DELETE. sheet: ~a. (sheet-direct-mirror sheet) ==> ~a"
             sheet (sheet-direct-mirror sheet))
+  (log:info "DELETE. current-thread: ~a" (bt:current-thread))
   ;;This works: I think by avoiding going through the SDL request
   ;;mechanism. That should be okay because event handlers should be being called
   ;;on the SDL thread anyways (I think...)

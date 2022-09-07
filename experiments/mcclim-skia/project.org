@@ -2,10 +2,11 @@
 This is a mashup of Pavel Korlev's (borodust) aw-skia, the skia parts in alien-works and McCLIM.
 
 * Skia/Lisp type puns
-| Skia Type | Decayed C type | Lisp cffi type |
-|-----------+----------------+----------------|
-| SkColor   | uint32_t       | u32            |
-| SkColor4f | array-of-float | f32 x 4        |
+| Skia Type | Decayed C type                    | Lisp cffi type |
+|-----------+-----------------------------------+----------------|
+| SkColor   | uint32_t                          | u32            |
+| SkColor4f | array-of-float                    | f32 x 4        |
+| SkPoint   | 32-bit floating point coordinates | f32x2          |
 
 * Notes
 ** McCLIM event heirarchy
@@ -29,3 +30,5 @@ event
     window-manager-event
     window-manager-delete-event
   timer-event
+** SDL/Multithreading event handling and rendering
+https://gamedev.stackexchange.com/questions/189987/how-to-process-events-as-well-as-do-opengl-rendering-using-multithreading
