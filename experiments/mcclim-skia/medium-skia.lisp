@@ -15,7 +15,7 @@
   ;;        (skia-canvas (canvas (skia-context mirror))))
   ;;   (log:info "skia-canvas: ~a" skia-canvas)
   ;;   (make-instance 'skia-opengl-medium :skia-canvas skia-canvas))
-  (make-instance 'skia-opengl-medium :skia-canvas nil))
+  (make-instance 'skia-opengl-medium :port port :skia-canvas nil))
 
 (defun %lookup-skia-canvas (medium)
   (or (skia-canvas medium)
@@ -32,11 +32,6 @@
   (alx:once-only (medium)
     `(let ((canvas::*canvas* (%lookup-skia-canvas ,medium)))
        (progn ,@body))))
-
-(comment
-  (with-skia-canvas ((mirror-medium mirror))
-    (log:info "Got canvas: ~a" *canvas*))
-  )
 
 (defmethod medium-draw-line* ((medium skia-opengl-medium) x1 y1 x2 y2)
   (let ((tr (sheet-native-transformation (medium-sheet medium))))

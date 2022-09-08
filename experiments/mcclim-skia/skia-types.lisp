@@ -3,10 +3,16 @@
 (define-enumval-extractor color-type-enum %skia:sk-color-type)
 (define-enumval-extractor surface-origin-enum %skia:gr-surface-origin)
 (define-enumval-extractor clip-op-enum %skia:sk-clip-op)
+;; :fill-style :stroke-style :stroke-and-fill-style
 (define-enumval-extractor paint-style-enum %skia:sk-paint+style)
+;; :miter-join :round-join :bevel-join :last-join :default-join
+(define-enumval-extractor paint-join-enum %skia:sk-paint+join)
+;; :butt-cap :round-cap :square-cap :last-cap :default-cap
+(define-enumval-extractor paint-join-enum %skia:sk-paint+cap)
 (define-enumval-extractor path-add-mode-enum %skia::sk-path+add-mode)
 (define-enumval-extractor path-arc-size-mode-enum %skia::sk-path+arc-size)
 (define-enumval-extractor path-segment-mask-num %skia::sk-path-segment-mask)
+;; :cw :ccw
 (define-enumval-extractor path-direction-enum %skia::sk-path-direction)
 (define-enumval-extractor path-first-direction-enum %skia::sk-path-first-direction)
 (define-enumval-extractor path-fill-type-enum %skia::sk-path-fill-type)
@@ -62,6 +68,7 @@
 (defun set-paint-stroke (paint &optional (stroke t))
   (%skia:set-stroke '(:pointer %skia::sk-paint) paint
                           :bool stroke))
+
 (defun set-paint-stroke-width (paint width)
   (%skia:set-stroke-width
    '(:pointer %skia::sk-paint) paint

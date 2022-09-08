@@ -51,6 +51,13 @@
 (defun paint-color32argb (c)
   (skia-core::set-paint-color32argb *paint* c))
 
+(defun point (x y &key (canvas *canvas*) (paint *paint*))
+  (%skia:draw-point
+   '(:pointer %skia:sk-canvas) canvas
+   '%skia:sk-scalar (float x 0f0)
+   '%skia:sk-scalar (float y 0f0)
+   '(:pointer %skia:sk-paint) paint))
+
 (defun line (x1 y1 x2 y2 &key (canvas *canvas*) (paint *paint*))
   (%skia:draw-line
    '(:pointer %skia:sk-canvas) canvas
@@ -67,11 +74,32 @@
    '(:pointer %skia:sk-paint) paint
    ))
 
+(defun arc (x y width height start-angle sweep-angle
+            &key (canvas *canvas*) (paint *paint*))
+  (skia-core::with-rectangle (rect x y width height)
+    (%skia:draw-arc
+     '(:pointer %skia:sk-canvas) canvas
+     '(:pointer %skia:sk-rect) rect
+     '%skia:sk-scalar (float start-angle 0f0)
+     '%skia:sk-scalar (float sweep-angle 0f0)
+     '(:pointer %skia:sk-paint) paint)))
+
+
 (defun rectangle (x y width height &key (canvas *canvas*) (paint *paint*))
   (skia-core::with-rectangle (rect x y width height)
     (%skia:draw-rect
      '(:pointer %skia:sk-canvas) canvas
      '(:pointer %skia:sk-rect) rect
+     '(:pointer %skia:sk-paint) paint)))
+
+(defun rounded-rectangle (x y width height radx rady
+                          &key (canvas *canvas*) (paint *paint*))
+  (skia-core::with-rectangle (rect x y width height)
+    (%skia:draw-round-rect
+     '(:pointer %skia:sk-canvas) canvas
+     '(:pointer %skia:sk-rect) rect
+     '%skia:sk-scalar (float x 0f0)
+     '%skia:sk-scalar (float y 0f0)
      '(:pointer %skia:sk-paint) paint)))
 
 (defun circle (x y radius &key (canvas *canvas*) (paint *paint*))
@@ -81,6 +109,13 @@
    '%skia:sk-scalar (float y 0f0)
    '%skia:sk-scalar (float radius 0f0)
    '(:pointer %skia:sk-paint) paint))
+
+(defun oval (x y width height &key (canvas *canvas*) (paint *paint*))
+  (skia-core::with-rectangle (rect x y width height)
+    (%skia:draw-oval
+     '(:pointer %skia:sk-canvas) canvas
+     '(:pointer %skia:sk-rect) rect
+     '(:pointer %skia:sk-paint) paint)))
 
 (defun simple-text (text x y &key (canvas *canvas*) (paint *paint*) (font *font*))
   (when *font*

@@ -9,6 +9,7 @@
   facilities it is very useful - you can see comments in the (one-time)
   macro expansion!\""
   (declare (ignore body)))
+
 ;;; A complete sheet should subclass basic-sheet and pick its mixins:
 ;;;
 ;;;   Input protocol (xor):
@@ -140,6 +141,7 @@
 (defparameter *skia-port* nil)
 (defparameter *skia-mirror* nil)
 (defparameter *skia-sheet* nil)
+(defparameter *skia-medium* nil)
 
 (defun open-skia-sheet (path &optional restartp)
   (let ((port (find-port :server-path path)))
@@ -152,6 +154,7 @@
           (mirror (realize-mirror port sheet)))
       (sheet-adopt-child graft sheet)
       (setf *skia-mirror* mirror
+            *skia-medium* (sheet-medium sheet)
             *skia-sheet* sheet))))
 
 (defun close-skia-sheet (sheet)
