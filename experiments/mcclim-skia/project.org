@@ -2,11 +2,11 @@
 This is a mashup of Pavel Korlev's (borodust) aw-skia, the skia parts in alien-works and McCLIM.
 
 * Skia/Lisp type puns
-| Skia Type | Decayed C type                    | Lisp cffi type |
-|-----------+-----------------------------------+----------------|
-| SkColor   | uint32_t                          | u32            |
-| SkColor4f | array-of-float                    | f32 x 4        |
-| SkPoint   | 32-bit floating point coordinates | f32x2          |
+| Skia Type | Decayed C type                                     | Lisp cffi type |
+|-----------+----------------------------------------------------+----------------|
+| SkColor   | uint32_t 32-bit ARGB color value, unpremultiplied. | u32            |
+| SkColor4f | array-of-float                                     | f32 x 4        |
+| SkPoint   | 32-bit floating point coordinates                  | f32x2          |
 
 * Notes
 ** McCLIM event heirarchy
@@ -32,3 +32,7 @@ event
   timer-event
 ** SDL/Multithreading event handling and rendering
 https://gamedev.stackexchange.com/questions/189987/how-to-process-events-as-well-as-do-opengl-rendering-using-multithreading
+** Skia Notes
+*** Skia Orientation
+From SkM44 docs:
+Skia assumes a right-handed coordinate system: +X goes to the right +Y goes down +Z goes into the screen (away from the viewer)

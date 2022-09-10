@@ -10,12 +10,11 @@
   macro expansion!\""
   (declare (ignore body)))
 
-;; Note: almost all of this is pulled straight from the alien-works project
+;; Note: A lot of this code is from the alien-works project
 ;; created by Pavel Korlev (MIT license)
 (declaim (special *canvas*
                   *paint*
                   *font*))
-
 
 ;;;
 ;;; Canvas maintenance
@@ -45,20 +44,22 @@
 ;;;
 ;;; DRAWING
 ;;;
-(defun paint-color (r g b a)
-  (skia-core::set-paint-color4f *paint* r g b a))
+(defun paint-color (r g b a &key (paint *paint*))
+  (skia-core::set-paint-color4f paint r g b a))
 
-(defun paint-color32argb (c)
-  (skia-core::set-paint-color32argb *paint* c))
+(defun paint-color32argb (c &key (paint *paint*))
+  (skia-core::set-paint-color32argb paint c))
 
-(defun point (x y &key (canvas *canvas*) (paint *paint*))
+(defun point (x y
+              &key (canvas *canvas*) (paint *paint*))
   (%skia:draw-point
    '(:pointer %skia:sk-canvas) canvas
    '%skia:sk-scalar (float x 0f0)
    '%skia:sk-scalar (float y 0f0)
    '(:pointer %skia:sk-paint) paint))
 
-(defun line (x1 y1 x2 y2 &key (canvas *canvas*) (paint *paint*))
+(defun line (x1 y1 x2 y2
+             &key (canvas *canvas*) (paint *paint*))
   (%skia:draw-line
    '(:pointer %skia:sk-canvas) canvas
    '%skia:sk-scalar (float x1 0f0)
@@ -66,13 +67,6 @@
    '%skia:sk-scalar (float x2 0f0)
    '%skia:sk-scalar (float y2 0f0)
    '(:pointer %skia:sk-paint) paint))
-
-(defun path (path &key (canvas *canvas*) (paint *paint*))
-  (%skia:draw-path
-   '(:pointer %skia:sk-canvas) canvas
-   '(:pointer %skia:sk-path) path
-   '(:pointer %skia:sk-paint) paint
-   ))
 
 (defun arc (x y width height start-angle sweep-angle
             &key (canvas *canvas*) (paint *paint*))
@@ -84,8 +78,8 @@
      '%skia:sk-scalar (float sweep-angle 0f0)
      '(:pointer %skia:sk-paint) paint)))
 
-
-(defun rectangle (x y width height &key (canvas *canvas*) (paint *paint*))
+(defun rectangle (x y width height
+                  &key (canvas *canvas*) (paint *paint*))
   (skia-core::with-rectangle (rect x y width height)
     (%skia:draw-rect
      '(:pointer %skia:sk-canvas) canvas
@@ -102,7 +96,8 @@
      '%skia:sk-scalar (float y 0f0)
      '(:pointer %skia:sk-paint) paint)))
 
-(defun circle (x y radius &key (canvas *canvas*) (paint *paint*))
+(defun circle (x y radius
+               &key (canvas *canvas*) (paint *paint*))
   (%skia:draw-circle
    '(:pointer %skia:sk-canvas) canvas
    '%skia:sk-scalar (float x 0f0)
@@ -110,14 +105,23 @@
    '%skia:sk-scalar (float radius 0f0)
    '(:pointer %skia:sk-paint) paint))
 
-(defun oval (x y width height &key (canvas *canvas*) (paint *paint*))
+(defun oval (x y width height
+             &key (canvas *canvas*) (paint *paint*))
   (skia-core::with-rectangle (rect x y width height)
     (%skia:draw-oval
      '(:pointer %skia:sk-canvas) canvas
      '(:pointer %skia:sk-rect) rect
      '(:pointer %skia:sk-paint) paint)))
 
-(defun simple-text (text x y &key (canvas *canvas*) (paint *paint*) (font *font*))
+(defun path (path
+             &key (canvas *canvas*) (paint *paint*))
+  (%skia:draw-path
+   '(:pointer %skia:sk-canvas) canvas
+   '(:pointer %skia:sk-path) path
+   '(:pointer %skia:sk-paint) paint))
+
+(defun simple-text (text x y
+                    &key (canvas *canvas*) (paint *paint*) (font *font*))
   (when *font*
     (cffi:with-foreign-string ((ftext byte-size) text :encoding :utf-8)
       (%skia:draw-simple-text
@@ -133,41 +137,44 @@
 ;;;
 ;;; Transforms
 ;;;
-(defun save-transform ()
-  (%skia:save '(claw-utils:claw-pointer %skia:sk-canvas) *canvas*))
+(defun save-transform (&key (canvas *canvas*))
+  (%skia:save '(claw-utils:claw-pointer %skia:sk-canvas) canvas))
 
-(defun restore-transform ()
-  (%skia:restore '(claw-utils:claw-pointer %skia:sk-canvas) *canvas*))
+(defun restore-transform (&key (canvas *canvas*))
+  (%skia:restore '(claw-utils:claw-pointer %skia:sk-canvas) canvas))
 
-(defun reset-transform ()
+(defun reset-transform (&key (canvas *canvas*))
   (%skia:restore-to-count
-   '(claw-utils:claw-pointer %skia:sk-canvas) *canvas*
+   '(claw-utils:claw-pointer %skia:sk-canvas) canvas
    :int 1))
 
-(defun translate (x y &key (canvas *canvas*))
+(defun translate (x y
+                  &key (canvas *canvas*))
   (%skia:translate
-   '(claw-utils:claw-pointer %skia:sk-canvas) *canvas*
+   '(claw-utils:claw-pointer %skia:sk-canvas) canvas
    '%skia:sk-scalar (float x 0f0)
    '%skia:sk-scalar (float y 0f0)))
 
-(defun rotate (degrees &key (canvas *canvas*))
+(defun rotate (degrees
+               &key (canvas *canvas*))
   (%skia:rotate
-   '(claw-utils:claw-pointer %skia:sk-canvas) *canvas*
+   '(claw-utils:claw-pointer %skia:sk-canvas) canvas
    '%skia:sk-scalar (float degrees 0f0)))
 
-(defun rotate-around (x y degrees &key (canvas *canvas*))
+(defun rotate-around (x y degrees
+                      &key (canvas *canvas*))
   (%skia:rotate
-   '(claw-utils:claw-pointer %skia:sk-canvas) *canvas*
+   '(claw-utils:claw-pointer %skia:sk-canvas) canvas
    '%skia:sk-scalar (float degrees 0f0)
    '%skia:sk-scalar (float x 0f0)
    '%skia:sk-scalar (float y 0f0)))
 
-(defun scale (x y &key (canvas *canvas*))
+(defun scale (x y
+              &key (canvas *canvas*))
   (%skia:scale
-   '(claw-utils:claw-pointer %skia:sk-canvas) *canvas*
+   '(claw-utils:claw-pointer %skia:sk-canvas) canvas
    '%skia:sk-scalar (float x 0f0)
    '%skia:sk-scalar (float y 0f0)))
-
 
 ;;;
 ;;; FONTS
