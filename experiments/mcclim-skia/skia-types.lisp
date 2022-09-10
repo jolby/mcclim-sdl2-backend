@@ -246,3 +246,62 @@
 
 (defun path-close (path)
   (%skia:close '(:pointer %skia:sk-path) path))
+
+(defun make-typeface (font-data-ub8-array)
+  (assert (or (subtypep (array-element-type font-data-ub8-array) '(unsigned-byte 8))
+              (subtypep (array-element-type font-data-ub8-array) '(signed-byte 8))))
+  (let ((typeface (iffi:intricate-alloc '%skia:sk-sp<sk-typeface>)))
+    (skia-core::with-pinned-array-pointer (font-data-ptr font-data-ub8-array)
+      (iffi:with-intricate-alloc (data %skia:sk-sp<sk-data>)
+        (%skia:sk-data+make-with-copy
+         '(claw-utils:claw-pointer %skia:sk-sp<sk-data>) data
+         '(claw-utils:claw-pointer :void) font-data-ptr
+         '%skia:size-t (length font-data-ub8-array))
+        (unwind-protect
+             (progn
+               (%skia:sk-typeface+make-from-data
+                '(claw-utils:claw-pointer %skia:sk-sp<sk-typeface>) typeface
+                '(claw-utils:claw-pointer %skia:sk-sp<sk-data>) data
+                :int 0))
+          (%skia:~sk-sp
+           '(claw-utils:claw-pointer %skia:sk-sp<sk-data>) data))))
+    typeface))
+
+(defun destroy-typeface (typeface)
+  (%skia:~sk-sp
+   '(claw-utils:claw-pointer %skia:sk-sp<sk-typeface>) typeface)
+  (iffi:intricate-free typeface)
+  (values))
+
+(defun %typeface-family-name (typeface-ptr)
+  (unless (cffi:null-pointer-p typeface-ptr)
+    (iffi:with-intricate-instance (sk-str %skia:sk-string)
+      (%skia:get-family-name
+       :const
+       '(claw-utils:claw-pointer %skia:sk-typeface) typeface-ptr
+       '(claw-utils:claw-pointer %skia:sk-string) sk-str)
+      (cffi:foreign-string-to-lisp
+       (%skia:c-str :const '(claw-utils:claw-pointer %skia:sk-string) sk-str)
+       :encoding :utf-8))))
+
+(defun typeface-family-name (typeface)
+  (%typeface-family-name (%skia:get
+                          :const
+                          '(claw-utils:claw-pointer %skia:sk-sp<sk-typeface>) typeface)))
+
+(defun make-default-font ()
+  (iffi:make-intricate-instance '%skia:sk-font))
+
+(defun make-font (typeface)
+  (iffi:make-intricate-instance
+   '%skia:sk-font
+   '(claw-utils:claw-pointer %skia:sk-sp<sk-typeface>) typeface))
+
+(defun destroy-font (font)
+  (iffi:destroy-intricate-instance '%skia:sk-font font))
+
+(defun font-family-name (font)
+  (%typeface-family-name
+   (%skia:get-typeface-or-default
+    :const
+    '(claw-utils:claw-pointer %skia:sk-font) font)))

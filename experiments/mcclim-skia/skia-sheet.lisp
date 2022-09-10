@@ -97,7 +97,7 @@
                        :ink +deep-sky-blue+)
       (draw-circle* medium 0 0 25 :ink (alexandria:random-elt
                                         (make-contrasting-inks 8)))
-      ;;(draw-text* medium "(0,0)" 0 0)
+      (draw-text* medium "(100,100)" 100 100)
       ;;(sleep 1)
       (medium-finish-output sheet))))
 
@@ -145,6 +145,17 @@
 (defparameter *skia-mirror* nil)
 (defparameter *skia-sheet* nil)
 (defparameter *skia-medium* nil)
+(defparameter *skia-default-typeface* nil)
+
+(defun load-test-font ()
+  (let ((font-path (asdf:system-relative-pathname
+                    "mcclim-sdl2-skia" "assets/fonts/NimbusRoman-Regular.otf")))
+    (unless (uiop/filesystem:file-exists-p font-path)
+      (error (format nil "File: ~a doesn't exist!" font-path)))
+    (let* ((file-bytes-vec (skia-core::read-file-into-shareable-vector font-path))
+          (typeface (skia-core::make-typeface file-bytes-vec)))
+      (setf *skia-default-typeface* typeface)
+      (setf canvas::*default-typeface* typeface))))
 
 (defun open-skia-sheet (path &optional restartp)
   (let ((port (find-port :server-path path)))
@@ -173,6 +184,7 @@
 
 (comment
 
+  (load-test-font)
 
   (defparameter *skia-port* (find-port :server-path :sdl2))
   (defparameter *skia-sheet* (make-instance 'skia-app-sheet :port *skia-port*))

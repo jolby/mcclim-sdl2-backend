@@ -114,3 +114,64 @@
                   (run-cleanups *cleanup-context*))
                 )))
        (setf *cleanup-context* (if *cleanup-context-chain* (pop *cleanup-context-chain*) nil)))))
+
+;; From borodust's alien-works
+(defun read-file-into-shareable-vector (location
+                                        &key
+                                          ((:into provided-shareable-vector))
+                                          offset ((:size provided-size)))
+  (when (and provided-shareable-vector
+             provided-size
+             (> provided-size (length provided-shareable-vector)))
+    (error "Provided size is smaller than length of provided shareable vector"))
+  (with-open-file (stream location :direction :input
+                                   :element-type '(unsigned-byte 8))
+    (let* ((file-size (file-length stream))
+           (offset (if (> file-size 0)
+                       (mod (or offset 0) file-size)
+                       0))
+           (rest-file-size (- file-size offset))
+           (calculated-size
+             (min rest-file-size
+                  (or provided-size rest-file-size)
+                  (or (and provided-shareable-vector (length provided-shareable-vector))
+                      rest-file-size))))
+      (when (> (+ offset (or provided-size 0)) file-size)
+        (error "Sum of offset and provided size is greater than size of the ~A: got ~A, expected no more than ~A"
+               location (+ offset calculated-size) file-size))
+      (file-position stream offset)
+      (let* ((out (if provided-shareable-vector
+                      provided-shareable-vector
+                      (cffi:make-shareable-byte-vector calculated-size))))
+        (read-sequence out stream :start 0 :end calculated-size)
+        (values out file-size)))))
+
+(defun try-static-vector-pointer (data)
+  (ignore-errors
+   (static-vectors:static-vector-pointer data)))
+
+
+(defun try-shareable-vector-pointer (data)
+  (ignore-errors
+   (cffi:with-pointer-to-vector-data (ptr data)
+     ptr)))
+
+
+(defmacro with-pinned-array-pointer ((ptr data &key try-pinned-copy)
+                                     &body body)
+  (alx:with-gensyms (body-fu tmp-vec)
+    (alx:once-only (data)
+      `(flet ((,body-fu (,ptr)
+                ,@body))
+         (alx:if-let (,ptr (try-static-vector-pointer ,data))
+           (funcall #',body-fu ,ptr)
+           (if (try-shareable-vector-pointer ,data)
+               (cffi:with-pointer-to-vector-data (,ptr ,data)
+                 (funcall #',body-fu ,ptr))
+               ,(if try-pinned-copy
+                    `(sv:with-static-vector (,tmp-vec
+                                             (length ,data)
+                                             :element-type (array-element-type ,data)
+                                             :initial-contents ,data)
+                       (funcall #',body-fu (sv:static-vector-pointer ,tmp-vec)))
+                    '(error "Failed to pin the array"))))))))

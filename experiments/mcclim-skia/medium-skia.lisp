@@ -10,7 +10,10 @@
   ((skia-canvas :initarg :skia-canvas :accessor skia-canvas)
    (paint-stack :initarg nil
                 :initform (make-array 1 :fill-pointer 0 :adjustable t)
-                :accessor medium-paint-stack)))
+                :accessor medium-paint-stack)
+   (font-stack :initarg nil
+                :initform (make-array 1 :fill-pointer 0 :adjustable t)
+                :accessor medium-font-stack)))
 
 (defmethod make-medium ((port mcclim-sdl2::sdl2-port) (sheet sdl2-skia-top-level-sheet))
   ;; XXX this doesn't work. The mirror hasn't been realized yet
@@ -49,6 +52,26 @@
           (progn ,@body)
        (%pop-paint medium))))
 
+(defun %push-font (medium &optional typeface)
+  (let ((font (if typeface
+                  (skia-core::make-font typeface)
+                  (skia-core::make-default-font))))
+    (vector-push-extend font (medium-font-stack medium))
+    (setf canvas::*font* font)))
+
+(defun %pop-font (medium)
+  (let ((font-stack (medium-font-stack medium)))
+    (skia-core::destroy-font (vector-pop font-stack))
+    (setf canvas::*font* (when (> (length font-stack) 0)
+                            (aref font-stack (1- (length font-stack)))))))
+
+(defmacro with-font ((medium typeface) &body body)
+  `(progn
+     (%push-font ,medium ,typeface)
+     (unwind-protect
+          (progn ,@body)
+       (%pop-font ,medium))))
+
 (defun %sync-skia-paint-with-medium (medium)
   (let ((line-style (medium-line-style medium))
         (ink (medium-ink medium)))
@@ -64,9 +87,12 @@
 (defmacro with-skia-canvas ((medium) &body body)
   (alx:once-only (medium)
     `(let ((canvas::*canvas* (%lookup-skia-canvas ,medium)))
-       (with-paint (medium)
-         (%sync-skia-paint-with-medium medium)
-       (progn ,@body)))))
+       (with-font (medium canvas::*default-typeface*)
+         ;;XXX TODO pull from medium
+         (canvas::font-size 64)
+         (with-paint (medium)
+           (%sync-skia-paint-with-medium medium)
+           (progn ,@body))))))
 
 (defmethod medium-draw-line* ((medium skia-opengl-medium) x1 y1 x2 y2)
   (let ((tr (sheet-native-transformation (medium-sheet medium))))
@@ -103,6 +129,25 @@
           (canvas::path path)
           ;;XXX Do this here or just in medium-finish/force-output??
           (canvas::flush-canvas)))))
+
+(defmethod medium-draw-text* ((medium skia-opengl-medium) string x y
+                              start end
+                              align-x align-y
+                              toward-x toward-y transform-glyphs)
+  (declare (ignore toward-x toward-y transform-glyphs))
+  (let ((merged-transform (sheet-device-transformation (medium-sheet medium))))
+    (when (characterp string)
+      (setq string (make-string 1 :initial-element string)))
+    (let ((fixed-string (subseq string (or start 0) (or end (length string)))))
+      ;; missing stuff
+      (multiple-value-bind (transformed-x transformed-y)
+          (transform-position merged-transform x y)
+        (log:info "Drawing string ~s at (~s,~s)"
+                  fixed-string transformed-x transformed-y)
+        (with-skia-canvas (medium)
+          ;; (skia-core:move-to transformed-x transformed-y)
+          (canvas::simple-text fixed-string transformed-x transformed-y)
+          (canvas::flush-canvas))))))
 
 (defun test-drawing-star (medium)
   ;; https://fiddle.skia.org/c/@skcanvas_star
