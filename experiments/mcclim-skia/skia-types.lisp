@@ -47,7 +47,6 @@
 ;; for hex-encoded 32argb representation
 ;; ... later also accept keywords for different colorspaces HSL etc...
 ;; (defun make-color (&rest args))
-
 (defun make-paint ()
   (iffi:make-intricate-instance '%skia:sk-paint))
 

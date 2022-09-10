@@ -44,10 +44,12 @@
 ;;;
 ;;; DRAWING
 ;;;
-(defun paint-color (r g b a &key (paint *paint*))
+(defun paint-color (r g b a
+                    &key (paint *paint*))
   (skia-core::set-paint-color4f paint r g b a))
 
-(defun paint-color32argb (c &key (paint *paint*))
+(defun paint-color32argb (c
+                          &key (paint *paint*))
   (skia-core::set-paint-color32argb paint c))
 
 (defun point (x y
@@ -68,7 +70,7 @@
    '%skia:sk-scalar (float y2 0f0)
    '(:pointer %skia:sk-paint) paint))
 
-(defun arc (x y width height start-angle sweep-angle
+(defun arc (x y width height start-angle sweep-angle use-center
             &key (canvas *canvas*) (paint *paint*))
   (skia-core::with-rectangle (rect x y width height)
     (%skia:draw-arc
@@ -76,6 +78,7 @@
      '(:pointer %skia:sk-rect) rect
      '%skia:sk-scalar (float start-angle 0f0)
      '%skia:sk-scalar (float sweep-angle 0f0)
+     :bool use-center
      '(:pointer %skia:sk-paint) paint)))
 
 (defun rectangle (x y width height
@@ -92,8 +95,8 @@
     (%skia:draw-round-rect
      '(:pointer %skia:sk-canvas) canvas
      '(:pointer %skia:sk-rect) rect
-     '%skia:sk-scalar (float x 0f0)
-     '%skia:sk-scalar (float y 0f0)
+     '%skia:sk-scalar (float radx 0f0)
+     '%skia:sk-scalar (float rady 0f0)
      '(:pointer %skia:sk-paint) paint)))
 
 (defun circle (x y radius
@@ -115,10 +118,12 @@
 
 (defun path (path
              &key (canvas *canvas*) (paint *paint*))
+  (log:info "canvas::path canvas: ~a, path: ~a, paint: ~a" canvas path paint)
   (%skia:draw-path
    '(:pointer %skia:sk-canvas) canvas
    '(:pointer %skia:sk-path) path
-   '(:pointer %skia:sk-paint) paint))
+   '(:pointer %skia:sk-paint) paint)
+    (log:info "DONE canvas::path canvas: ~a, path: ~a, paint: ~a" canvas path paint))
 
 (defun simple-text (text x y
                     &key (canvas *canvas*) (paint *paint*) (font *font*))
