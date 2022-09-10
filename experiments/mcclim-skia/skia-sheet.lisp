@@ -162,6 +162,7 @@
     (when restartp
       (restart-port port))
     (setf *skia-port* port)
+    (unless *skia-default-typeface* (load-test-font))
     (let* (;; Supplying :PORT here is a kludge in the core.
           (sheet (make-instance 'skia-app-sheet :port port))
           (graft (find-graft :port port))
