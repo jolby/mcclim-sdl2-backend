@@ -8,7 +8,7 @@
 ;; :miter-join :round-join :bevel-join :last-join :default-join
 (define-enumval-extractor paint-join-enum %skia:sk-paint+join)
 ;; :butt-cap :round-cap :square-cap :last-cap :default-cap
-(define-enumval-extractor paint-join-cap %skia:sk-paint+cap)
+(define-enumval-extractor paint-cap-enum %skia:sk-paint+cap)
 (define-enumval-extractor path-add-mode-enum %skia::sk-path+add-mode)
 (define-enumval-extractor path-arc-size-mode-enum %skia::sk-path+arc-size)
 (define-enumval-extractor path-segment-mask-num %skia::sk-path-segment-mask)
@@ -81,22 +81,63 @@
   (%skia:set-color '(:pointer %skia::sk-paint) paint
                    '%skia::sk-color c))
 
+(defun paint-anti-alias-p (paint)
+  (%skia:is-anti-alias :const '(:pointer %skia::sk-paint) paint))
 
 (defun set-paint-anti-alias (paint &optional (antialias t))
   (%skia:set-anti-alias '(:pointer %skia::sk-paint) paint
                         :bool antialias))
 
+(defun get-paint-style (paint)
+  (%skia:get-style :const '(:pointer %skia::sk-paint) paint))
+
+(defun set-paint-style (paint style)
+  (%skia:set-style '(:pointer %skia::sk-paint) paint
+                   '%skia:sk-paint+style style))
+
+;;XXX maybe get rid of this and just use set-paint-style
 (defun set-paint-stroke (paint &optional (stroke t))
   (%skia:set-stroke '(:pointer %skia::sk-paint) paint
                     :bool stroke))
+
+(defun paint-stroke-p (paint)
+  (let ((style (get-paint-style paint)))
+    (member style '(:stroke-style :stroke-and-fill-style) :test 'eq)))
+
+(defun paint-fill-p (paint)
+  (let ((style (get-paint-style paint)))
+    (member style '(:fill-style :stroke-and-fill-style) :test 'eq)))
+
+(defun paint-stroke-and-fill-p (paint)
+  (eq :stroke-and-fill-style (get-paint-style paint)))
+
+(defun get-paint-stroke-width (paint)
+  (%skia:get-stroke-width :const '(:pointer %skia::sk-paint) paint))
 
 (defun set-paint-stroke-width (paint width)
   (%skia:set-stroke-width '(:pointer %skia::sk-paint) paint
                           '%skia:sk-scalar (float width 1f0)))
 
-(defun set-paint-style (paint style)
-  (%skia:set-style '(:pointer %skia::sk-paint) paint
-                   '%skia:sk-paint+style style))
+(defun get-paint-stroke-miter (paint)
+  (%skia:get-stroke-miter :const '(:pointer %skia::sk-paint) paint))
+
+(defun set-paint-stroke-miter (paint miter)
+  (%skia:set-stroke-miter '(:pointer %skia::sk-paint) paint
+                          '%skia:sk-scalar (float miter 1f0)))
+
+(defun get-paint-stroke-cap (paint)
+  (%skia:get-stroke-cap :const '(:pointer %skia::sk-paint) paint))
+
+(defun set-paint-stroke-cap (paint stroke-cap)
+  (%skia:set-stroke-cap '(:pointer %skia::sk-paint) paint
+                   '%skia:sk-paint+cap stroke-cap))
+
+(defun get-paint-stroke-join (paint)
+  (%skia:get-stroke-join :const '(:pointer %skia::sk-paint) paint))
+
+(defun set-paint-stroke-join (paint stroke-join)
+  (%skia:set-stroke-join '(:pointer %skia::sk-paint) paint
+                   '%skia:sk-paint+join stroke-join))
 
 ;;
 ;; Geometric objects

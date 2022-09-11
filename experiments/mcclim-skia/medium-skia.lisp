@@ -16,11 +16,6 @@
                 :accessor medium-font-stack)))
 
 (defmethod make-medium ((port mcclim-sdl2::sdl2-port) (sheet sdl2-skia-top-level-sheet))
-  ;; XXX this doesn't work. The mirror hasn't been realized yet
-  ;; (let* ((mirror (sheet-mirrored-ancestor sheet))
-  ;;        (skia-canvas (canvas (skia-context mirror))))
-  ;;   (log:info "skia-canvas: ~a" skia-canvas)
-  ;;   (make-instance 'skia-opengl-medium :skia-canvas skia-canvas))
   (make-instance 'skia-opengl-medium :port port :skia-canvas nil))
 
 (defun %lookup-skia-canvas (medium)
@@ -47,10 +42,10 @@
 
 (defmacro with-paint ((medium) &body body)
   `(progn
-     (%push-paint medium)
+     (%push-paint ,medium)
      (unwind-protect
           (progn ,@body)
-       (%pop-paint medium))))
+       (%pop-paint ,medium))))
 
 (defun %push-font (medium &optional typeface)
   (let ((font (if typeface
@@ -110,7 +105,6 @@
               (canvas::path path)
               ;;XXX Do this here or just in medium-finish/force-output??
               (canvas::flush-canvas))))))))
-
 
 (defmethod medium-draw-polygon* ((medium skia-opengl-medium) coord-seq closed filled)
   (let ((tr (sheet-native-transformation (medium-sheet medium))))
