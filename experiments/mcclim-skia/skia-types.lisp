@@ -139,6 +139,11 @@
   (%skia:set-stroke-join '(:pointer %skia::sk-paint) paint
                    '%skia:sk-paint+join stroke-join))
 
+(defun paint-to-string (paint)
+  (format nil "SkPaint (~s) color: #~x, style: ~s anti-alias: ~a, ~%width: ~a, miter: ~a, cap: ~s, join: ~s"
+          paint (get-paint-color32argb paint) (get-paint-style paint) (paint-anti-alias-p paint)
+          (get-paint-stroke-width paint) (get-paint-stroke-miter paint)
+          (get-paint-stroke-cap paint) (get-paint-stroke-join paint)))
 ;;
 ;; Geometric objects
 ;;

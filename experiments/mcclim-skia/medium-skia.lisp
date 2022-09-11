@@ -140,6 +140,7 @@
                   fixed-string transformed-x transformed-y)
         (with-skia-canvas (medium)
           ;; (skia-core:move-to transformed-x transformed-y)
+          (skia-core::set-paint-style canvas::*paint* :stroke-and-fill-style)
           (canvas::simple-text fixed-string transformed-x transformed-y)
           (canvas::flush-canvas))))))
 

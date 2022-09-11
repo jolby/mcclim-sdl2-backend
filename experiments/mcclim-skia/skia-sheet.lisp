@@ -83,21 +83,26 @@
   ()
   (:default-initargs :icon *glider*
                      :pretty-name "McCLIM Skia Test Sheet"
-                     :region (make-rectangle* -200 -200 1080 720)))
+                     ;; :region (make-rectangle* -200 -200 1080 720)
+                     :region (make-rectangle* 0 0 1080 720)
+   ))
 
 (defun simple-draw (sheet)
   (let ((medium sheet))
     (with-bounding-rectangle* (x1 y1 x2 y2) medium
       (log:info "bounding rect: x1: ~a, y1: ~a, x2: ~a, y2: ~a" x1 y1 x2 y2)
       (medium-clear-area medium x1 y1 x2 y2)
-      (medium-draw-line* medium 0 0 500 500)
       (draw-rectangle* medium
                        (+ x1 10) (+ y1 10)
                        (- x2 10) (- y2 10)
                        :ink +deep-sky-blue+)
-      (draw-circle* medium 0 0 25 :ink (alexandria:random-elt
+      (draw-circle* medium 10 10 25 :ink (alexandria:random-elt
                                         (make-contrasting-inks 8)))
+      (draw-point* medium 100 100 :ink +black+ :line-thickness 8)
       (draw-text* medium "(100,100)" 100 100)
+      (draw-line* medium 10 10 500 500 :ink +red+ :line-thickness 4)
+      (draw-point* medium 10 10 :ink +green+ :line-thickness 8)
+      (draw-point* medium 500 500 :ink +red+ :line-thickness 8)
       ;;(sleep 1)
       (medium-finish-output sheet))))
 
