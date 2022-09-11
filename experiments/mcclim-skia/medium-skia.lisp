@@ -3,6 +3,11 @@
 (defun round-coordinate (x)
   (floor (+ x .5)))
 
+(defun ensure-string-value (v)
+  (etypecase v
+    (string v)
+    (character (string v))))
+
 (defclass skia-opengl-medium (basic-medium)
   ;;XXX do we want skia canvas as a slot or as a special dynamic var? The
   ;;skia-canvas will need to be invalidated on screen resizes and maybe other
@@ -90,6 +95,16 @@
            (progn ,@body))))))
 
 (defmethod medium-draw-line* ((medium skia-opengl-medium) x1 y1 x2 y2)
+  (with-skia-canvas (medium)
+    (skia-core::with-path (path)
+      (skia-core::move-to path x1 y1)
+      (skia-core::line-to path x2 y2)
+      (skia-core::path-close path)
+      (canvas::path path)
+      ;;XXX Do this here or just in medium-finish/force-output??
+      (canvas::flush-canvas))) )
+
+(comment
   (let ((tr (sheet-native-transformation (medium-sheet medium))))
     (climi::with-transformed-position (tr x1 y1)
       (climi::with-transformed-position (tr x2 y2)
@@ -104,32 +119,61 @@
               (skia-core::path-close path)
               (canvas::path path)
               ;;XXX Do this here or just in medium-finish/force-output??
-              (canvas::flush-canvas))))))))
+              (canvas::flush-canvas)))))))
+  )
+
 
 (defmethod medium-draw-polygon* ((medium skia-opengl-medium) coord-seq closed filled)
+  (with-skia-canvas (medium)
+    (skia-core::with-path (path)
+      (let ((x (first coord-seq))
+            (y (second coord-seq)))
+        (loop :for (x y) :on (cddr coord-seq) :by #'cddr
+              :do (skia-core::line-to path x y))
+      (when closed (skia-core::path-close path))
+      (when filled (skia-core::set-paint-style canvas::*paint* :fill-style))
+      (log:info "path: ~a, is-valid: ~a" path (%skia:is-valid :const '(:pointer %skia:sk-path) path))
+      (canvas::path path)
+      ;;XXX Do this here or just in medium-finish/force-output??
+      (canvas::flush-canvas) ))))
+
+(comment
   (let ((tr (sheet-native-transformation (medium-sheet medium))))
     (with-skia-canvas (medium)
-        (skia-core::with-path (path)
-          (multiple-value-bind (x y)
-              (climi::transform-position tr (first coord-seq) (second coord-seq))
-            (skia-core::move-to path x y))
-          (loop :for (x y) :on (cddr coord-seq) :by #'cddr
-                :do (multiple-value-bind (nx ny)
-                        (climi::transform-position tr x y)
-                      (skia-core::line-to path nx ny)))
-          (when closed (skia-core::path-close path))
-          (when filled (skia-core::set-paint-style canvas::*paint* :fill-style))
-          (log:info "path: ~a, is-valid: ~a" path (%skia:is-valid :const '(:pointer %skia:sk-path) path))
-          (canvas::path path)
-          ;;XXX Do this here or just in medium-finish/force-output??
-          (canvas::flush-canvas)))))
+      (skia-core::with-path (path)
+        (multiple-value-bind (x y)
+            (climi::transform-position tr (first coord-seq) (second coord-seq))
+          (skia-core::move-to path x y))
+        (loop :for (x y) :on (cddr coord-seq) :by #'cddr
+              :do (multiple-value-bind (nx ny)
+                      (climi::transform-position tr x y)
+                    (skia-core::line-to path nx ny)))
+        (when closed (skia-core::path-close path))
+        (when filled (skia-core::set-paint-style canvas::*paint* :fill-style))
+        (log:info "path: ~a, is-valid: ~a" path (%skia:is-valid :const '(:pointer %skia:sk-path) path))
+        (canvas::path path)
+        ;;XXX Do this here or just in medium-finish/force-output??
+        (canvas::flush-canvas))))
+  )
 
-(defmethod medium-draw-text* ((medium skia-opengl-medium) string x y
+(defmethod medium-draw-text* ((medium skia-opengl-medium) text x y
                               start end
                               align-x align-y
                               toward-x toward-y transform-glyphs)
   (declare (ignore toward-x toward-y transform-glyphs))
-  (let ((merged-transform (sheet-device-transformation (medium-sheet medium))))
+  (let ((text (ensure-string-value text)))
+    (when (alx:emptyp text)
+      (return-from medium-draw-text*))
+    (let ((fixed-text (subseq text (or start 0) (or end (length text)))))
+      (log:info "Drawing string ~s at (~s,~s)"
+                fixed-text x y)
+      (with-skia-canvas (medium)
+        (skia-core::set-paint-style canvas::*paint* :stroke-and-fill-style)
+        (canvas::simple-text fixed-text x y)
+        (canvas::flush-canvas)) )))
+
+(comment
+ (let ((merged-transform (sheet-device-transformation (medium-sheet medium))))
     (when (characterp string)
       (setq string (make-string 1 :initial-element string)))
     (let ((fixed-string (subseq string (or start 0) (or end (length string)))))
@@ -142,7 +186,9 @@
           ;; (skia-core:move-to transformed-x transformed-y)
           (skia-core::set-paint-style canvas::*paint* :stroke-and-fill-style)
           (canvas::simple-text fixed-string transformed-x transformed-y)
-          (canvas::flush-canvas))))))
+          (canvas::flush-canvas)))))
+  )
+
 
 (defun test-drawing-star (medium)
   ;; https://fiddle.skia.org/c/@skcanvas_star
