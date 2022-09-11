@@ -87,6 +87,21 @@
                      :region (make-rectangle* 0 0 1080 720)
    ))
 
+;;;; XXX Ghastly
+(in-package #:clim-internals)
+(defclass color-with-alpha (clim-internals::standard-color)
+  ((alpha :initarg :alpha :initform 1 :type (real 0 1))))
+
+(defmethod color-rgba ((color color-with-alpha))
+  (with-slots (red green blue alpha) color
+      (values red green blue alpha)))
+
+(defun make-rgba-color (red green blue &optional (alpha 1.0))
+  (make-instance 'color-with-alpha :red red :green green :blue blue :alpha alpha))
+
+(in-package #:mcclim-skia)
+
+
 (defun simple-draw (sheet)
   (let ((medium sheet))
     (with-bounding-rectangle* (x1 y1 x2 y2) medium
@@ -98,11 +113,16 @@
                        :ink +deep-sky-blue+)
       (draw-circle* medium 10 10 25 :ink (alexandria:random-elt
                                         (make-contrasting-inks 8)))
+
+
       (draw-point* medium 100 100 :ink +black+ :line-thickness 8)
       (draw-text* medium "(100,100)" 100 100)
       (draw-line* medium 10 10 500 500 :ink +red+ :line-thickness 4)
       (draw-point* medium 10 10 :ink +green+ :line-thickness 8)
       (draw-point* medium 500 500 :ink +red+ :line-thickness 8)
+      ;; Test opacity- will we see the red line undneath??
+      (draw-circle* medium 495 495 100 :ink (clim-internals::make-rgba-color 0.4 0.8 0.5 0.8))
+
       ;;(sleep 1)
       (medium-finish-output sheet))))
 
