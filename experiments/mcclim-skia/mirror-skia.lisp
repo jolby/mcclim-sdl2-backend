@@ -15,6 +15,9 @@
            (gl-context (make-gl-context-for-window window))
            (skia-context (skia-core:make-skia-context w h)))
       (sdl2:gl-make-current window gl-context)
+      (gl:clear-color 1.0 1.0 1.0 1.0)
+      (gl:clear :color-buffer-bit :depth-buffer-bit)
+
       (make-instance 'sdl2-opengl-skia-mirror :sheet sheet :window window :id id
                                               :gl-context gl-context :skia-context skia-context))))
 
