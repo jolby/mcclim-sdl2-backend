@@ -113,8 +113,6 @@
                        :ink +deep-sky-blue+)
       (draw-circle* medium 10 10 25 :ink (alexandria:random-elt
                                         (make-contrasting-inks 8)))
-
-
       (draw-point* medium 100 100 :ink +black+ :line-thickness 8)
       (draw-text* medium "(100,100)" 100 100)
       (draw-line* medium 10 10 500 500 :ink +red+ :line-thickness 4)
@@ -126,6 +124,9 @@
       ;;(sleep 1)
       (medium-finish-output sheet))))
 
+(mcclim-sdl2::define-sdl2-request do-simple-draw (sheet)
+  (simple-draw *skia-sheet*))
+
 (defmethod handle-event ((sheet skia-app-sheet) event)
   (log:info "Unhandled event ~s has arrived." (class-name (class-of event))))
 
@@ -135,10 +136,11 @@
   ;; *configuration-event-p* to inhibit this behavior, but we need to come up
   ;; with something better. perhaps we should handle differently size-changed
   ;; and resize from sdl events.
-  (resize-sheet sheet
-                (climi::window-configuration-event-width event)
-                (climi::window-configuration-event-height event))
-  (repaint-sheet sheet +everywhere+))
+  (let ((climi::*configuration-event-p* sheet))
+    (resize-sheet sheet
+                  (climi::window-configuration-event-width event)
+                  (climi::window-configuration-event-height event))
+    (repaint-sheet sheet +everywhere+)))
 
 (defmethod handle-event ((sheet skia-app-sheet) (event window-manager-delete-event))
   (log:info "DELETE. sheet: ~a. (sheet-direct-mirror sheet) ==> ~a"
@@ -163,7 +165,7 @@
 (defmethod handle-repaint ((sheet skia-app-sheet) region)
   (log:warn "Repainting a window (region ~s)." region)
 
-  (simple-draw sheet))
+  (do-simple-draw sheet))
 
 
 (defparameter *skia-port* nil)
@@ -200,8 +202,6 @@
 (defun close-skia-sheet (sheet)
   (sheet-disown-child (graft sheet) sheet))
 
-(mcclim-sdl2::define-sdl2-request do-simple-draw (sheet)
-  (simple-draw *skia-sheet*))
 
 (defun nuke-state ()
   (when *skia-sheet* (destroy-mirror *skia-port* *skia-sheet*) (setf *skia-sheet* nil))
