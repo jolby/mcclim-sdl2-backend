@@ -102,7 +102,8 @@
       (skia-core::path-close path)
       (canvas::path path)
       ;;XXX Do this here or just in medium-finish/force-output??
-      (canvas::flush-canvas))) )
+      ;; (canvas::flush-canvas)
+      )) )
 
 (defmethod medium-draw-polygon* ((medium skia-opengl-medium) coord-seq closed filled)
   (with-skia-canvas (medium)
@@ -114,10 +115,11 @@
               :do (skia-core::path-line-to path x y))
       (when closed (skia-core::path-close path))
       (when filled (skia-core::set-paint-style canvas::*paint* :fill-style))
-      (log:info "path: ~a, is-valid: ~a" path (%skia:is-valid :const '(:pointer %skia:sk-path) path))
+      ;; (log:info "path: ~a, is-valid: ~a" path (%skia:is-valid :const '(:pointer %skia:sk-path) path))
       (canvas::path path)
       ;;XXX Do this here or just in medium-finish/force-output??
-      (canvas::flush-canvas) ))))
+      ;; (canvas::flush-canvas)
+        ))))
 
 (defmethod medium-draw-rectangle* ((medium basic-medium) x1 y1 x2 y2 filled)
   (let ((width (abs (- x2 x1)))
@@ -126,7 +128,8 @@
       (when filled (skia-core::set-paint-style canvas::*paint* :fill-style))
         (canvas::rectangle x1 y1 width height)
         ;;XXX Do this here or just in medium-finish/force-output??
-        (canvas::flush-canvas))  ))
+        ;; (canvas::flush-canvas)
+      )))
 
 ;; (defmethod medium-draw-circle* ((medium basic-medium) cx cy radius eta1 eta2 filled)
 ;;   )
@@ -145,7 +148,8 @@
       (with-skia-canvas (medium)
         (skia-core::set-paint-style canvas::*paint* :stroke-and-fill-style)
         (canvas::simple-text fixed-text x y)
-        (canvas::flush-canvas)) )))
+        ;; (canvas::flush-canvas)
+        ) )))
 
 (defun test-drawing-star (medium)
   ;; https://fiddle.skia.org/c/@skcanvas_star
@@ -162,7 +166,7 @@
            (y-start 0f0)
            ;; (y-start -300f0)
            (tau 6.2831853))
-      (skia-core::move-to path r y-start)
+      (skia-core::path-move-to path r y-start)
       ;; (log:info "move-to: ~a,~a" r y)
       ;; (skia-core::move-to path r 400.0)
       ;; (skia-core::move-to path 800 800)
@@ -172,7 +176,7 @@
             :for x := (* r (cos theta)) :then (* r (cos theta))
             :for y := (* r (sin theta)) :then (* r (sin theta))
             :do (progn
-                  (skia-core::line-to path x y)
+                  (skia-core::path-line-to path x y)
                   (log:info "line-to: ~a,~a theta: ~a, tau: ~a" x y theta tau)
                   ))
       (skia-core::path-close path)
@@ -222,8 +226,11 @@
          )
     ;; (log:info "updating the surface ~s ~s" width height)
     ;; (test-skia-drawing medium)
+    (with-skia-canvas (medium)
+      (canvas::flush-canvas))
+
     (sdl2::gl-swap-window window)
-    (sleep .1)
+    ;; (sleep .1)
     ))
 
 (defmethod medium-finish-output :before ((medium skia-opengl-medium))
