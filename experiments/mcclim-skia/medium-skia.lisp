@@ -13,12 +13,18 @@
   ;;skia-canvas will need to be invalidated on screen resizes and maybe other
   ;;situations as well.
   ((skia-canvas :initarg :skia-canvas :accessor skia-canvas)
-   (paint-stack :initarg nil
+   (%paint-stack :initarg nil
                 :initform (make-array 1 :fill-pointer 0 :adjustable t)
                 :accessor medium-paint-stack)
-   (font-stack :initarg nil
+   (%font-stack :initarg nil
                 :initform (make-array 1 :fill-pointer 0 :adjustable t)
-                :accessor medium-font-stack)))
+                :accessor medium-font-stack)
+   ;; Maybe make this a deferred-drawing-mixin???
+   (%deferred-command-queue :initarg nil
+                           :initform (make-array 128 :fill-pointer 0 :adjustable t :initial-element nil)
+     :accessor medium-deferred-command-queue)
+
+   ))
 
 (defmethod make-medium ((port mcclim-sdl2::sdl2-port) (sheet sdl2-skia-top-level-sheet))
   (make-instance 'skia-opengl-medium :port port :skia-canvas nil))
@@ -93,6 +99,50 @@
          (with-paint (medium)
            (%sync-skia-paint-with-medium medium)
            (progn ,@body))))))
+;;;
+;;; DRAW COMMAND
+;;;
+(defstruct (draw-command
+            (:constructor make-draw-command ())
+            (:conc-name %draw-command-))
+  (name nil)
+  (arguments nil))
+
+(defun update-draw-command (command name &rest arguments)
+  (setf (%draw-command-name command) name
+        (%draw-command-arguments command) arguments))
+
+(defun invoke-draw-command (command)
+  (log:info "CMD: ~a" command)
+  (apply (%draw-command-name command) (%draw-command-arguments command)))
+
+;;;
+;;; COMMAND QUEUE
+;;;
+(defun push-command (medium name &rest args)
+  (let* ((queue (medium-deferred-command-queue medium))
+         (fp (fill-pointer queue)))
+    (if (= fp (array-total-size queue))
+        (vector-push-extend nil queue 128)
+        (setf (fill-pointer queue) (1+ fp)))
+
+    (let ((next-command (alx:if-let ((next-command (aref queue fp)))
+                          next-command
+                          (setf (aref queue fp) (make-draw-command)))))
+      (apply #'update-draw-command next-command name args)))
+  (values))
+
+(defun drain-draw-commands (medium)
+  (let ((array (medium-deferred-command-queue medium)))
+    (unwind-protect
+         (loop for command across array
+               do (invoke-draw-command command)
+                  (update-draw-command command nil))
+      (setf (fill-pointer array) 0))))
+
+(defun discard-command-queue (medium)
+  (setf (fill-pointer (medium-deferred-command-queue medium)) 0)
+  (values))
 
 (defmethod medium-draw-line* ((medium skia-opengl-medium) x1 y1 x2 y2)
   (with-skia-canvas (medium)
@@ -100,7 +150,9 @@
       (skia-core::path-move-to path x1 y1)
       (skia-core::path-line-to path x2 y2)
       (skia-core::path-close path)
-      (canvas::path path)
+      ;; (canvas::path path)
+      (push-command medium #'canvas::path path)
+
       ;;XXX Do this here or just in medium-finish/force-output??
       ;; (canvas::flush-canvas)
       )) )
@@ -113,12 +165,11 @@
         (skia-core::path-move-to path x y)
         (loop :for (x y) :on (cddr coord-seq) :by #'cddr
               :do (skia-core::path-line-to path x y))
-      (when closed (skia-core::path-close path))
-      (when filled (skia-core::set-paint-style canvas::*paint* :fill-style))
-      ;; (log:info "path: ~a, is-valid: ~a" path (%skia:is-valid :const '(:pointer %skia:sk-path) path))
-      (canvas::path path)
-      ;;XXX Do this here or just in medium-finish/force-output??
-      ;; (canvas::flush-canvas)
+        (when closed (skia-core::path-close path))
+        (when filled (skia-core::set-paint-style canvas::*paint* :fill-style))
+        ;; (log:info "path: ~a, is-valid: ~a" path (%skia:is-valid :const '(:pointer %skia:sk-path) path))
+        ;; (canvas::path path)
+        (push-command medium #'canvas::path path)
         ))))
 
 (defmethod medium-draw-rectangle* ((medium basic-medium) x1 y1 x2 y2 filled)
@@ -126,9 +177,9 @@
         (height (abs (- y2 y1))))
     (with-skia-canvas (medium)
       (when filled (skia-core::set-paint-style canvas::*paint* :fill-style))
-        (canvas::rectangle x1 y1 width height)
-        ;;XXX Do this here or just in medium-finish/force-output??
-        ;; (canvas::flush-canvas)
+      ;; (canvas::rectangle x1 y1 width height)
+      (push-command medium #'canvas::rectangle x1 y1 width height)
+
       )))
 
 ;; (defmethod medium-draw-circle* ((medium basic-medium) cx cy radius eta1 eta2 filled)
@@ -147,8 +198,8 @@
                 fixed-text x y)
       (with-skia-canvas (medium)
         (skia-core::set-paint-style canvas::*paint* :stroke-and-fill-style)
-        (canvas::simple-text fixed-text x y)
-        ;; (canvas::flush-canvas)
+        ;; (canvas::simple-text fixed-text x y)
+        (push-command medium #'canvas::simple-text fixed-text x y)
         ) )))
 
 (defun test-drawing-star (medium)
@@ -216,27 +267,25 @@
   (test-drawing-star medium)
   )
 
-(defun %mirror-force-output (medium mirror)
-  ;; (declare (optimize speed))
-  ;; (log:info "finalizing output")
-  (let* ((window (mcclim-sdl2::sdl2-window (mcclim-sdl2::window-id mirror)))
-         (surface (sdl2:get-window-surface window))
-         ;; (width (sdl2:surface-width surface))
-         ;; (height (sdl2:surface-height surface))
-         )
-    ;; (log:info "updating the surface ~s ~s" width height)
-    ;; (test-skia-drawing medium)
-    (with-skia-canvas (medium)
-      (canvas::flush-canvas))
 
-    (sdl2::gl-swap-window window)
-    ;; (sleep .1)
-    ))
+(defun %mirror-force-output (medium mirror)
+  (let* ((window (mcclim-sdl2::sdl2-window (mcclim-sdl2::window-id mirror))))
+    (with-skia-canvas (medium)
+      (drain-draw-commands medium)
+      (canvas::flush-canvas))
+    (sdl2::gl-swap-window window)))
+
+;;XXX this won't work until we create a draw-command queue
+;;all drawing requests must happen on the main/render thread or
+;;you just get a black screen
+(mcclim-sdl2::define-sdl2-request do-mirror-force-output (medium mirror)
+  (log:info "do-force-output on thread: ~a" (bt:current-thread))
+  (%mirror-force-output medium mirror))
 
 (defmethod medium-finish-output :before ((medium skia-opengl-medium))
   (alx:when-let ((mirror (medium-drawable medium)))
-    (%mirror-force-output medium mirror)))
+    (do-mirror-force-output medium mirror)))
 
 (defmethod medium-force-output :before ((medium skia-opengl-medium))
   (alx:when-let ((mirror (medium-drawable medium)))
-    (%mirror-force-output medium mirror)))
+    (do-mirror-force-output medium mirror)))

@@ -120,6 +120,7 @@
 
 (defun path (path
              &key (canvas *canvas*) (paint *paint*))
+  (log:info "canvas: ~a, path: ~a, paint: ~a" canvas path paint)
   (%skia:draw-path
    '(:pointer %skia:sk-canvas) canvas
    '(:pointer %skia:sk-path) path
