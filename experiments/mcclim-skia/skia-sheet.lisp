@@ -124,6 +124,8 @@
       ;;(sleep 1)
       (medium-finish-output sheet))))
 
+;;XXX REMEMBER: all drawing calls must be submitted to the main SDL
+;;rendering thread. If not, you'll just get a black window.
 (mcclim-sdl2::define-sdl2-request do-simple-draw (sheet)
   (simple-draw *skia-sheet*))
 
@@ -150,22 +152,14 @@
   ;;mechanism. That should be okay because event handlers should be being called
   ;;on the SDL thread anyways (I think...)
   (alx:when-let ((mirror (sheet-direct-mirror sheet)))
-    (%destroy-sdl2-opengl-skia-mirror mirror))
-
-  ;; (break)
-  ;; XXX this gets called twice. Why??
-  ;; (destroy-mirror (port sheet) sheet)
-  ;; (alx:when-let ((mirror (sheet-direct-mirror sheet)))
-  ;;   (destroy-mirror (port sheet) mirror))
-  )
+    (%destroy-sdl2-opengl-skia-mirror mirror)))
 
 (defmethod handle-event ((sheet skia-app-sheet) (event window-repaint-event))
   (handle-repaint sheet (window-event-region event)))
 
 (defmethod handle-repaint ((sheet skia-app-sheet) region)
   (log:warn "Repainting a window (region ~s)." region)
-
-  (do-simple-draw sheet))
+  (simple-draw sheet))
 
 
 (defparameter *skia-port* nil)
