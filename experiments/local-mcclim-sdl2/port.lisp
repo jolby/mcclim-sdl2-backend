@@ -84,7 +84,7 @@
   (if *multiprocessing-p*
       (unless (main-thread port)
         (setf (main-thread port)
-              (clim-sys:make-process (alx:curry #'%loop-port port)))
+              (clim-sys:make-process (alx:curry #'%loop-port port) :name "MAIN-CLIM-SDL2-LOOP"))
         (loop until *initialized-p*
               do (clim-sys:with-lock-held (*initialized-lock*)
                    (clim-sys:condition-wait *initialized-cv* *initialized-lock*))))
