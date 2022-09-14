@@ -78,27 +78,102 @@
           (progn ,@body)
        (%pop-font ,medium))))
 
-(defun %sync-skia-paint-with-medium (medium)
-  (let ((line-style (medium-line-style medium))
-        (ink (medium-ink medium)))
-    (skia-core::set-paint-stroke-width canvas::*paint*
-                                       (line-style-thickness line-style))
-    ;;xxx do we want the anti-alias setting?
-    (skia-core::set-paint-anti-alias canvas::*paint* t)
-    (skia-core::set-paint-stroke canvas::*paint* t)
+;;:butt-cap :round-cap :square-cap :last-cap :default-cap
+;; :butt :square :round :no-end-point (default :butt)
+(defvar *cap-map*
+  '((:butt . :butt-cap)
+    (:butt . :default-cap)
+    (:square . :square-cap)
+    (:square . :last-cap)
+    (:round . :round-cap)))
+;;:miter-join :round-join :bevel-join :last-join :default-join
+;;:miter :bevel :round :none (default :miter)
+(defvar *join-map*
+  '((:miter . :miter-join)
+    (:miter . :default-join)
+    (:bevel . :bevel-join)
+    (:bevel . :last-join)
+    (:round . :round-join)))
+
+(defun %line-style-match-p (ls ps map-alist)
+  (loop :for (l . p) in map-alist
+        :when (and (eq l ls) (eq p ps))
+              :collect (list l p)))
+
+(defun %paint-style-lookup (ls map-alist)
+  (loop :for (l . p) in map-alist
+        :when (eq l ls)
+          :return p))
+
+(defun push-paint-command (medium &key (color4f '(0.0 0.0 0.0 1.0))
+                           (color32argb nil color32argb-p)
+                           (stroke-width 1) (stroke-cap :butt-cap) (join-cap :miter-join))
+  (let ((new-paint (%push-paint medium)))
+    (if color32argb
+        (canvas::paint-color32argb color32argb)
+        (canvas::paint-color (nth 0 color4f) (nth 1 color4f) (nth 2 color4f) (nth 3 color4f)))
+    (skia-core::set-paint-stroke-cap new-paint stroke-cap)
+    (skia-core::set-paint-stroke-join new-paint join-cap)
+    (skia-core::set-paint-stroke-width new-paint stroke-width)
+    (skia-core::set-paint-anti-alias new-paint t)))
+
+(defun %capture-paint-to-command-queue (medium ink ls)
+  (let* ((ls-cap (line-style-cap-shape ls))
+         (ls-join (line-style-joint-shape ls))
+         (ls-width (line-style-thickness ls)))
     (multiple-value-bind (red green blue alpha)
         (clime::color-rgba ink)
-      (skia-core::set-paint-color4f canvas::*paint* red green blue alpha))))
+      (push-command medium #'push-paint-command medium
+                    :color4f (list red green blue alpha) :stroke-width ls-width
+                    :stroke-cap (%paint-style-lookup ls-cap *cap-map*)
+                    :join-cap (%paint-style-lookup ls-join *join-map*)))))
+
+(defun sk-paint-needs-change-p (ink line-style &optional (paint canvas::*paint*))
+  (let* ((changelist)
+         (ls-cap (line-style-cap-shape line-style))
+         (p-cap (skia-core::get-paint-stroke-cap paint))
+         (ls-join (line-style-joint-shape line-style))
+         (p-join (skia-core::get-paint-stroke-join paint)))
+    (unless (every #'= (list (clime::color-rgba ink)) (list (skia-core::get-paint-color4f paint)))
+      (push :color changelist))
+    (unless (= (line-style-thickness line-style) (skia-core::get-paint-stroke-width paint))
+      (push :stroke-width changelist))
+    (unless (%line-style-match-p ls-cap p-cap *cap-map*)
+      (push :cap-style changelist))
+    (unless (%line-style-match-p ls-join p-join *join-map*)
+      (push :join-style changelist))
+    ;;XXX TODO dashes and other path effects... gradients,shadow,glow,blur etc effects?
+  changelist))
+
+(defun sk-font-needs-change-p (ink text-style &optional (font canvas::*font*))
+  t)
+
+(defun %invoke-with-skia-drawing-state-synced-with-medium (medium continuation)
+  (let* ((ink (medium-ink medium))
+         (line-style (medium-line-style medium))
+         (text-style (medium-text-style medium))
+         (clip (medium-clipping-region medium))
+         (transform (medium-transformation medium))
+         (paint-change-p (sk-paint-needs-change-p ink line-style))
+         (font-change-p (sk-font-needs-change-p ink text-style))
+        )
+    (when paint-change-p (%capture-paint-to-command-queue medium ink line-style))
+    (unwind-protect
+         (progn
+           (funcall continuation)
+           )
+      (when paint-change-p (push-command medium #'%pop-paint medium)))))
 
 (defmacro with-skia-canvas ((medium) &body body)
   (alx:once-only (medium)
-    `(let ((canvas::*canvas* (%lookup-skia-canvas ,medium)))
-       (with-font (medium canvas::*default-typeface*)
-         ;;XXX TODO pull from medium
-         (canvas::font-size 64)
-         (with-paint (medium)
-           (%sync-skia-paint-with-medium medium)
-           (progn ,@body))))))
+    (alx:with-gensyms (gskia-draw-op)
+      `(let ((canvas::*canvas* (%lookup-skia-canvas ,medium)))
+         (flet ((,gskia-draw-op ()
+                  ,@body))
+           (declare (dynamic-extent #',gskia-draw-op))
+             (%invoke-with-skia-drawing-state-synced-with-medium
+              ,medium #',gskia-draw-op)
+           )))))
 ;;;
 ;;; DRAW COMMAND
 ;;;
@@ -113,32 +188,36 @@
         (%draw-command-arguments command) arguments))
 
 (defun invoke-draw-command (command)
-  (log:info "CMD: ~a" command)
+  (log:info "CMD: ~a" (%draw-command-name command))
   (apply (%draw-command-name command) (%draw-command-arguments command)))
 
 ;;;
 ;;; COMMAND QUEUE
 ;;;
-(defun push-command (medium name &rest args)
-  (let* ((queue (medium-deferred-command-queue medium))
-         (fp (fill-pointer queue)))
-    (if (= fp (array-total-size queue))
-        (vector-push-extend nil queue 128)
-        (setf (fill-pointer queue) (1+ fp)))
+(defvar *command-queue-lock* (bt:make-lock))
 
-    (let ((next-command (alx:if-let ((next-command (aref queue fp)))
-                          next-command
-                          (setf (aref queue fp) (make-draw-command)))))
-      (apply #'update-draw-command next-command name args)))
+
+(defun push-command (medium name &rest args)
+  (bt:with-lock-held (*command-queue-lock*)
+    (let* ((queue (medium-deferred-command-queue medium))
+           (fp (fill-pointer queue)))
+      (if (= fp (array-total-size queue))
+          (vector-push-extend nil queue 128)
+          (setf (fill-pointer queue) (1+ fp)))
+      (let ((next-command (alx:if-let ((next-command (aref queue fp)))
+                            next-command
+                            (setf (aref queue fp) (make-draw-command)))))
+        (apply #'update-draw-command next-command name args))) )
   (values))
 
 (defun drain-draw-commands (medium)
-  (let ((array (medium-deferred-command-queue medium)))
-    (unwind-protect
-         (loop for command across array
-               do (invoke-draw-command command)
-                  (update-draw-command command nil))
-      (setf (fill-pointer array) 0))))
+  (bt:with-lock-held (*command-queue-lock*)
+    (let ((array (medium-deferred-command-queue medium)))
+      (unwind-protect
+           (loop for command across array
+                 do (invoke-draw-command command)
+                    (update-draw-command command nil))
+        (setf (fill-pointer array) 0)))) )
 
 (defun discard-command-queue (medium)
   (setf (fill-pointer (medium-deferred-command-queue medium)) 0)
@@ -146,41 +225,20 @@
 
 (defmethod medium-draw-line* ((medium skia-opengl-medium) x1 y1 x2 y2)
   (with-skia-canvas (medium)
-    (skia-core::with-path (path)
-      (skia-core::path-move-to path x1 y1)
-      (skia-core::path-line-to path x2 y2)
-      (skia-core::path-close path)
-      ;; (canvas::path path)
-      (push-command medium #'canvas::path path)
-
-      ;;XXX Do this here or just in medium-finish/force-output??
-      ;; (canvas::flush-canvas)
-      )) )
+      (push-command medium #'canvas::line x1 y1 x2 y2)
+    ))
 
 (defmethod medium-draw-polygon* ((medium skia-opengl-medium) coord-seq closed filled)
   (with-skia-canvas (medium)
-    (skia-core::with-path (path)
-      (let* ((x (first coord-seq))
-             (y (second coord-seq)))
-        (skia-core::path-move-to path x y)
-        (loop :for (x y) :on (cddr coord-seq) :by #'cddr
-              :do (skia-core::path-line-to path x y))
-        (when closed (skia-core::path-close path))
-        (when filled (skia-core::set-paint-style canvas::*paint* :fill-style))
-        ;; (log:info "path: ~a, is-valid: ~a" path (%skia:is-valid :const '(:pointer %skia:sk-path) path))
-        ;; (canvas::path path)
-        (push-command medium #'canvas::path path)
-        ))))
+    (push-command medium #'canvas::polygon coord-seq :closed closed :filled filled)))
 
 (defmethod medium-draw-rectangle* ((medium basic-medium) x1 y1 x2 y2 filled)
   (let ((width (abs (- x2 x1)))
         (height (abs (- y2 y1))))
     (with-skia-canvas (medium)
-      (when filled (skia-core::set-paint-style canvas::*paint* :fill-style))
+      ;; (when filled (skia-core::set-paint-style canvas::*paint* :fill-style))
       ;; (canvas::rectangle x1 y1 width height)
-      (push-command medium #'canvas::rectangle x1 y1 width height)
-
-      )))
+      (push-command medium #'canvas::rectangle x1 y1 width height))))
 
 ;; (defmethod medium-draw-circle* ((medium basic-medium) cx cy radius eta1 eta2 filled)
 ;;   )
@@ -267,13 +325,28 @@
   (test-drawing-star medium)
   )
 
+(defparameter *num-outputs* 0)
 
 (defun %mirror-force-output (medium mirror)
+  (incf *num-outputs*)
+  ;; (break)
   (let* ((window (mcclim-sdl2::sdl2-window (mcclim-sdl2::window-id mirror))))
-    (with-skia-canvas (medium)
-      (drain-draw-commands medium)
-      (canvas::flush-canvas))
-    (sdl2::gl-swap-window window)))
+    (let ((canvas::*paint* nil)
+          (canvas::*font* nil))
+      (%push-paint medium)
+      (log:info "XXX queue fill ptr: ~a"
+                (fill-pointer (medium-deferred-command-queue medium)))
+      (unwind-protect
+           (with-skia-canvas (medium)
+             (drain-draw-commands medium)
+             (log:info "XXX queue fill ptr: ~a"
+                       (fill-pointer (medium-deferred-command-queue medium)))
+             (canvas::flush-canvas)
+             ;; (when (< *num-outputs* 2) (canvas::flush-canvas))
+             )
+        (%pop-paint medium)))
+    (sdl2::gl-swap-window window)
+    ))
 
 ;;XXX this won't work until we create a draw-command queue
 ;;all drawing requests must happen on the main/render thread or
@@ -284,8 +357,17 @@
 
 (defmethod medium-finish-output :before ((medium skia-opengl-medium))
   (alx:when-let ((mirror (medium-drawable medium)))
+    (log:info "FINISH OUTPUT")
     (do-mirror-force-output medium mirror)))
 
 (defmethod medium-force-output :before ((medium skia-opengl-medium))
   (alx:when-let ((mirror (medium-drawable medium)))
-    (do-mirror-force-output medium mirror)))
+    ;; This appears to be called immediately after finish-output
+    ;; even though I can't find where in the source.
+    ;; This was causing spurious push-paint draw commands to be inserted
+    ;; in the command queue. This resulted in no actual drawing commands being
+    ;; queued to opengl, and then when calling swap-windows it presented a black
+    ;; screen.
+    (log:info "FORCE OUTPUT. DOING NOTHING...")
+    ;; (do-mirror-force-output medium mirror)
+    ))

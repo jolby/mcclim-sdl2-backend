@@ -126,6 +126,19 @@
    '(:pointer %skia:sk-path) path
    '(:pointer %skia:sk-paint) paint))
 
+(defun polygon (coord-seq
+                &key (closed t) (filled t)
+                  (canvas *canvas*) (paint *paint*))
+  (skia-core::with-path (poly-path)
+    (let* ((x (first coord-seq))
+           (y (second coord-seq)))
+      (skia-core::path-move-to poly-path x y)
+      (loop :for (x y) :on (cddr coord-seq) :by #'cddr
+            :do (skia-core::path-line-to poly-path x y))
+      (when closed (skia-core::path-close poly-path))
+      (when filled (skia-core::set-paint-style *paint* :fill-style))
+      (path poly-path))))
+
 (defun simple-text (text x y
                     &key (canvas *canvas*) (paint *paint*) (font *font*))
   (when *font*

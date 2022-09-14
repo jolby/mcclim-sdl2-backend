@@ -185,7 +185,8 @@
     (setf *skia-port* port)
     (unless *skia-default-typeface* (load-test-font))
     (let* (;; Supplying :PORT here is a kludge in the core.
-          (sheet (make-instance 'skia-app-sheet :port port))
+          (sheet
+(make-instance 'skia-app-sheet :port port))
           (graft (find-graft :port port))
           (mirror (realize-mirror port sheet)))
       (sheet-adopt-child graft sheet)
@@ -215,6 +216,7 @@
     (if (typep result 'condition)
         (error result)
         'done))
+  (simple-draw *skia-sheet*)
   (sheet-direct-mirror *skia-sheet*)
   (close-skia-sheet *skia-sheet*)
   (nuke-state)
