@@ -351,3 +351,8 @@
    (%skia:get-typeface-or-default
     :const
     '(claw-utils:claw-pointer %skia:sk-font) font)))
+
+(defun set-font-size (font)
+  (%skia:set-size
+   '(claw-utils:claw-pointer %skia:sk-font) font
+   '%skia:sk-scalar (float size 0f0)) )

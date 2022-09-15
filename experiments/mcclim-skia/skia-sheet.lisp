@@ -87,6 +87,11 @@
                      :region (make-rectangle* 0 0 1080 720)
    ))
 
+(defmethod medium-clear-area ((sheet skia-app-sheet) left top right bottom)
+  (let ((medium (sheet-medium sheet)))
+    (with-skia-canvas (medium)
+    (push-command medium #'canvas::clear-canvas))))
+
 ;;;; XXX Ghastly
 (in-package #:clim-internals)
 (defclass color-with-alpha (clim-internals::standard-color)
