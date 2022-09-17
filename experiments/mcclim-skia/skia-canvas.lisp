@@ -198,6 +198,11 @@
 ;;;
 ;;; FONTS
 ;;;
+(defun get-typeface (family face)
+  ;;XXX TODO really do typeface lookup
+  *default-typeface*
+  )
+
 (defun font-size (size)
   (when *font*
     (%skia:set-size

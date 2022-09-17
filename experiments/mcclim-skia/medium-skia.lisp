@@ -129,7 +129,7 @@
 (defun sk-font-needs-change-p (ink text-style &optional (font canvas::*font*))
   t)
 
-(defun %invoke-with-skia-drawing-state-synced-with-medium (medium continuation)
+(defun %invoke-with-capturing-medium-state (medium continuation)
   (let* ((ink (medium-ink medium))
          (line-style (medium-line-style medium))
          (text-style (medium-text-style medium))
@@ -184,7 +184,7 @@
                                     (stroke-cap :butt-cap) (join-cap :miter-join))
   (let ((new-paint (%push-paint medium)))
     (skia-core::set-paint-color32argb new-paint color32argb)
-    (skia-core::set-paint-stroke-style new-paint stroke-style)
+    (skia-core::set-paint-style new-paint stroke-style)
     (skia-core::set-paint-stroke-cap new-paint stroke-cap)
     (skia-core::set-paint-stroke-join new-paint join-cap)
     (skia-core::set-paint-stroke-width new-paint stroke-width)
@@ -207,20 +207,20 @@
                                    (face (text-style-face *default-text-style*))
                                    (family (text-style-family *default-text-style*)))
   (let ((new-paint (%push-paint medium))
-        (new-font (%push-font medium (%get-typeface face-family))))
+        (new-font (%push-font medium (canvas::get-typeface family face))))
     (skia-core::set-font-size size)
     (skia-core::set-paint-color32argb new-paint color32argb)
-    (skia-core::set-paint-stroke-style new-paint :stroke-and-fill-style)
+    (skia-core::set-paint-style new-paint :stroke-and-fill-style)
     (skia-core::set-paint-anti-alias new-paint t)
     ))
 
 
 (defun %capture-font-to-command-queue (medium ink text-style)
-  (let* ((color32argb (%ink->color32argb ink))
-         (push-command medium #'push-font-command medium :color32argb color32argb
-                                                         :size (text-style-size text-style)
-                                                         :face (text-style-face text-style)
-                                                         :family (text-style-family text-style)))))
+  (let* ((color32argb (%ink->color32argb ink)))
+    (push-command medium #'push-font-command medium :color32argb color32argb
+                                                    :size (text-style-size text-style)
+                                                    :face (text-style-face text-style)
+                                                    :family (text-style-family text-style))))
 
   (defun pop-paint-command (medium)
     (%pop-paint medium))
@@ -230,21 +230,21 @@
     (%pop-paint medium))
 
 (defmacro with-medium-to-skia-drawing-recorder ((medium) &body body)
-  (alx:with-gensyms (ink line-style text-style clip transform))
-  `(let* ((,ink (medium-ink ,medium))
-          (,line-style (medium-line-style ,medium))
-          (,text-style (medium-text-style ,medium))
-          (,clip (medium-clipping-region ,medium))
-          (,transform (medium-transformation ,medium))
-          )
-     (%capture-paint-to-command-queue ,medium ,ink ,line-style)
-     (%capture-font-to-command-queue ,medium ,ink ,line-style)
+  (alx:with-gensyms (ink line-style text-style clip transform)
+    `(let* ((,ink (medium-ink ,medium))
+            (,line-style (medium-line-style ,medium))
+            (,text-style (medium-text-style ,medium))
+            (,clip (medium-clipping-region ,medium))
+            (,transform (medium-transformation ,medium))
+            )
+       (%capture-paint-to-command-queue ,medium ,ink ,line-style)
+       (%capture-font-to-command-queue ,medium ,ink ,line-style)
 
-     (unwind-protect
-          (progn ,@body)
-       (push-command medium #'pop-font-command medium)
-       (push-command medium #'pop-paint-command medium)
-       )))
+       (unwind-protect
+            (progn ,@body)
+         (push-command medium #'pop-font-command medium)
+         (push-command medium #'pop-paint-command medium)
+         ))))
 
 ;;;
 ;;; DRAW COMMAND

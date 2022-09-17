@@ -12,9 +12,9 @@
                (:file "skia-canvas")
                (:file "skia-context")
                (:file "mirror-opengl")
-               (:file "skia-sheet")
                (:file "mirror-skia")
                (:file "medium-skia")
+               (:file "skia-sheet")
                ))
 
 (asdf:defsystem #:mcclim-sdl2-skia/blob
