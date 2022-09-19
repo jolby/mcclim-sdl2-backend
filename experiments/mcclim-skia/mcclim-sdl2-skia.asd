@@ -25,5 +25,6 @@
   :defsystem-depends-on (#:bodge-blobs-support)
   :class :bodge-blob-system
   :libraries ((
-               (:linux :x86-64) "libskia.clawed.so" "native-libs/x86_64-pc-linux-gnu/")
-              ))
+               ;; (:linux :x86-64) "libskia.clawed.so" "native-libs/x86_64-pc-linux-gnu/"
+               (:linux :x86-64) "libskia.clawed.37.so" "native-libs/x86_64-pc-linux-gnu/"
+              )))
