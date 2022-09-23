@@ -7,10 +7,12 @@
                         "log4cl" "lparallel" "cl-opengl" "aw-skia" "static-vectors")
   :serial t
   :components ((:file "packages")
+               (:file "clim-patches")
                (:file "utilities")
                (:file "skia-types")
                (:file "skia-canvas")
                (:file "skia-context")
+               (:file "mcclim-skia-types")
                (:file "mirror-opengl")
                (:file "mirror-skia")
                (:file "medium-skia")

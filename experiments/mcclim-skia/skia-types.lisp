@@ -19,6 +19,23 @@
 (define-enumval-extractor path-convexity-enum %skia::sk-path-convexity)
 (define-enumval-extractor path-verb-enum %skia::sk-path-verb)
 
+(define-enumval-extractor skia-shadow-enum %skia::sk-shadow-flags)
+
+(defun %unit-float->u8 (f-comp)
+  (logand (truncate (* f-comp 255)) 255))
+
+(defun color32-values (color32)
+  (values (logand 255 (ash color32 -24))
+          (logand 255 (ash color32 -16))
+          (logand 255 (ash color32 -8))
+          (logand 255 color32)))
+
+(defun color32-float-values (color32)
+  (values (/ (logand 255 (ash color32 -24)) 255.0)
+          (/ (logand 255 (ash color32 -16)) 255.0)
+          (/ (logand 255 (ash color32 -8)) 255.0)
+          (/ (logand 255 color32) 255.0)))
+
 (defun set-color4f (color4f r g b a)
   (iffi:with-intricate-slots
       %skia:sk-color4f ((cr %skia:f-r) (cg %skia:f-g)
@@ -32,14 +49,66 @@
   (let ((color (iffi:make-intricate-instance '%skia:sk-color4f)))
     (set-color4f color r g b a)))
 
+(defun make-color4f-from-color32rgba (color32rgba)
+  (multiple-value-bind (red green blue alpha) (color32-float-values color32rgba)
+    (make-color4f red green blue alpha)))
+
 (defun destroy-color4f (color4f)
   (iffi:destroy-intricate-instance '%skia:sk-color4f color4f))
 
-(defmacro with-color4f ((color-sym r g b a) &body body)
-  `(iffi:with-intricate-instance (,color-sym %skia:sk-color4f)
-     (set-color4f ,color-sym ,r ,g ,b ,a)
-     ,@body))
+(defmacro with-color4f ((color-sym make-form) &body body)
+  (alx:once-only (make-form)
+    `(let ((,color-sym ,make-form))
+       (unwind-protect
+            (progn
+              ,@body)
+         (destroy-color4f ,color-sym)))))
 
+(defun color4f-rgba-values (color4f)
+  (iffi:with-intricate-slots
+      %skia:sk-color4f ((cr %skia:f-r) (cg %skia:f-g)
+                        (cb %skia:f-b) (ca %skia:f-a))
+      color4f
+    (values cr cg cb ca)))
+
+(defun color4f-rgba-u8-values (color4f)
+  (iffi:with-intricate-slots
+      %skia:sk-color4f ((cr %skia:f-r) (cg %skia:f-g)
+                        (cb %skia:f-b) (ca %skia:f-a))
+      color4f
+    (values (%unit-float->u8 cr) (%unit-float->u8 cg)
+            (%unit-float->u8 cb) (%unit-float->u8 ca))))
+
+(defun color4f->color32argb (color4f)
+  (multiple-value-bind (red green blue alpha)
+      (color4f-rgba-values color4f)
+    (logior (ash (%unit-float->u8 alpha) 24)
+            (ash (%unit-float->u8 red) 16)
+            (ash (%unit-float->u8 green) 8)
+            (ash (%unit-float->u8 blue) 0))))
+
+(defun color4f->color32rgba (color4f)
+  (multiple-value-bind (red green blue alpha)
+      (color4f-rgba-values color4f)
+    (logior (ash (%unit-float->u8 red) 24)
+            (ash (%unit-float->u8 green) 16)
+            (ash (%unit-float->u8 blue) 8)
+            (ash (%unit-float->u8 alpha) 0))))
+
+(comment
+  (color32-values #xef00ff80)
+  (color32-float-values #xefccff80)
+  (with-color4f (rc (make-color4f 1 0 0 .5))
+    (color4f-rgba-values rc))
+  (with-color4f (rc (make-color4f 1 0 0 .5))
+    (color4f-rgba-u8-values rc))
+  (with-color4f (rc (make-color4f 1 0 0 .5))
+    (color4f->color32rgba rc))
+  (with-color4f (rc (make-color4f 1 0 0 .5))
+    (color4f->color32argb rc))
+  (with-color4f (rc (make-color4f-from-color32rgba #xef00ff80))
+    (color4f->color32rgba rc))
+  )
 ;; Need to make an ergonomic make-XXX function that accepts:
 ;; 3 or 4 8bit uints (r g b (a))
 ;; 3 or 4 floats (r g b (a))
@@ -68,10 +137,10 @@
       (values cr cg cb ca))))
 
 (defun set-paint-color4f (paint r g b a)
-  (with-color4f (c4f r g b a)
+  (with-color4f (color4f (make-color4f r g b a))
     (%skia:set-color
      '(claw-utils:claw-pointer %skia:sk-paint) paint
-     '(claw-utils:claw-pointer %skia:sk-color4f) c4f
+     '(claw-utils:claw-pointer %skia:sk-color4f) color4f
      '(claw-utils:claw-pointer %skia:sk-color-space) (cffi:null-pointer))))
 
 (defun get-paint-color32argb (paint)
@@ -163,6 +232,24 @@
 
 (defun destroy-point (p)
   (iffi:destroy-intricate-instance '%skia:sk-point p))
+
+(defun set-point3-xyz (point3 x y z)
+  (iffi:with-intricate-slots
+      %skia:sk-point3
+      ((px %skia:f-x)
+       (py %skia:f-y)
+       (pz %skia:f-z))
+      point3
+    (setf px (float x 0f0)
+          py (float y 0f0)
+          pz (float z 0f0))))
+
+(defun make-point3 (x y z)
+  (let ((p (iffi:make-intricate-instance '%skia:sk-point3)))
+    (set-point3-xyz p x y z)))
+
+(defun destroy-point3 (p)
+  (iffi:destroy-intricate-instance '%skia:sk-point3 p))
 
 (defun set-rectangle-xywh (rect x y w h)
   (%skia:set-xywh
@@ -352,7 +439,7 @@
     :const
     '(claw-utils:claw-pointer %skia:sk-font) font)))
 
-(defun set-font-size (font)
+(defun set-font-size (font size)
   (%skia:set-size
    '(claw-utils:claw-pointer %skia:sk-font) font
    '%skia:sk-scalar (float size 0f0)) )

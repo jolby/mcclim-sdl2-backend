@@ -227,6 +227,36 @@
      '(claw-utils:claw-pointer %skia:sk-font) *font*
      :bool (and subpixeled t))))
 
+;;;;
+;;;; Material Ops
+;;;;
+
+
+;; void drawShadowedPath(SkCanvas* canvas, const SkPath& path,
+;;                           const SkPoint3& zPlaneParams,
+;;                           const SkPaint& paint, SkScalar ambientAlpha,
+;;                           const SkPoint3& lightPos, SkScalar lightRadius, SkScalar spotAlpha)
+(defun draw-shadowed-path (path paint z-plane
+                           &key
+                             ;;Maybe don't take light-pos param? Could be source of leak
+                             ;;if caller provides and doesn't clean up
+                             (light-pos (skia-core::make-point3 0 -700 700) light-pos-p)
+                             (light-radius 1.1)
+                             (ambient-alpha 0.5) (spot-alpha 0.35)
+                             (shadow-flags 4) ;;directional light
+                             (canvas *canvas*))
+  (let ((z-plane3 (skia-core::make-point3 0 0 z-plane))
+        (light-pos3 (if light-pos-p light-pos (skia-core::make-point3 0 -700 700)))
+        )
+    (unwind-protect
+         (progn
+           (%skia::sk-shadow-utils+draw-shadow canvas path z-plane3
+                                               light-pos3 light-radius
+                                               ))
+      (skia-core::destroy-point3 z-plane3)
+      (unless light-pos-p (skia-core::destroy-point3 light-pos3)))
+    ))
+
 (comment
 
 (defun draw-skia (canvas)

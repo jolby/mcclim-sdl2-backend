@@ -10,6 +10,41 @@
   macro expansion!\""
   (declare (ignore body)))
 
+(defun %display-info (&optional (display-index 0))
+    (cffi:with-foreign-objects ((ddpi :float)
+                                (hdpi :float)
+                                (vdpi :float))
+      (sdl2-ffi.functions:sdl-get-display-dpi display-index ddpi hdpi vdpi)
+        (let* ((rect (sdl2:get-display-bounds display-index))
+               (w (sdl2:rect-width rect))
+               (h (sdl2:rect-height rect))
+               (ddpi (cffi:mem-ref ddpi :float))
+               (hdpi (cffi:mem-ref hdpi :float))
+               (vdpi (cffi:mem-ref vdpi :float))
+               (display-inches-w (/ w hdpi))
+               (display-inches-h (/ h vdpi))
+               (display-mm-w (* 25.4s0 (/ w hdpi)))
+               (display-mm-h (* 25.4s0 (/ h vdpi))))
+          `(:diagonal-dpi ,ddpi :horizontal-dpi ,hdpi :vertical-dpi ,vdpi
+            :display-w ,w :display-h ,h
+            :display-inches-w ,display-inches-w :display-inches-h ,display-inches-h
+            :display-mm-w ,display-mm-w :display-mm-h ,display-mm-h) )))
+(comment
+  (defvar *display-info* nil)
+  (unwind-protect
+       (progn
+         (mcclim-sdl2::%init-sdl2)
+         (setf *display-info* (%display-info)))
+    (mcclim-sdl2::%quit-sdl2))
+  ;;==>
+  (:DIAGONAL-DPI 153.27798 :HORIZONTAL-DPI 153.21497 :VERTICAL-DPI 153.42007
+   :DISPLAY-W 2256 :DISPLAY-H 1504
+   :DISPLAY-INCHES-W 14.72441 :DISPLAY-INCHES-H 9.80315
+   :DISPLAY-MM-W 374.0 :DISPLAY-MM-H 249.00002)
+
+
+)
+
 (defun enumval (enum value)
   (if (integerp value)
       (cffi:foreign-enum-keyword enum value)

@@ -1,9 +1,5 @@
 (in-package #:mcclim-skia)
 
-(defclass sdl2-opengl-skia-mirror (sdl2-opengl-mirror)
-  ((skia-context
-    :initarg :skia-context
-    :accessor skia-context)))
 
 (mcclim-sdl2::define-sdl2-request create-skia-mirror-for-sheet (sheet)
   (with-bounding-rectangle* (x y :width w :height h) sheet

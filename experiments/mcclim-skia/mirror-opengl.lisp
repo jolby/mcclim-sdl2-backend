@@ -5,19 +5,6 @@
                                           :share-with-current-context 1 :context-major-version 4 :context-minor-version 6
                                           :context-profile-mask (autowrap:enum-value 'sdl2-ffi:sdl-glprofile :core)))
 
-(defclass sdl2-opengl-mirror (mcclim-sdl2::mirror-with-sheet-mixin
-                              mcclim-sdl2::sdl2-window-handle-mixin)
-  ((window :initarg :window :accessor window)
-   (gl-context :initarg :gl-context :accessor gl-context)))
-
-(defclass opengl-mirrored-sheet-mixin (mirrored-sheet-mixin) ())
-
-(defclass sdl2-opengl-top-level-sheet
-    (top-level-sheet-mixin opengl-mirrored-sheet-mixin basic-sheet)
-  ())
-
-(defclass sdl2-opengl-window (sdl2-opengl-top-level-sheet basic-pane) ())
-
 (defun %create-context-by-version (window context-version-major context-version-minor context-profile-mask)
     (sdl2:gl-set-attr :context-profile-mask context-profile-mask)
     (sdl2:gl-set-attr :context-major-version context-version-major)

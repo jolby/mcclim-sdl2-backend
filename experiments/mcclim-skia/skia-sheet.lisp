@@ -92,21 +92,6 @@
     (with-skia-canvas (medium)
     (push-command medium #'canvas::clear-canvas))))
 
-;;;; XXX Ghastly
-(in-package #:clim-internals)
-(defclass color-with-alpha (clim-internals::standard-color)
-  ((alpha :initarg :alpha :initform 1 :type (real 0 1))))
-
-(defmethod color-rgba ((color color-with-alpha))
-  (with-slots (red green blue alpha) color
-      (values red green blue alpha)))
-
-(defun make-rgba-color (red green blue &optional (alpha 1.0))
-  (make-instance 'color-with-alpha :red red :green green :blue blue :alpha alpha))
-
-(in-package #:mcclim-skia)
-
-
 (defun simple-draw (sheet)
   (let ((medium sheet))
     (with-bounding-rectangle* (x1 y1 x2 y2) medium
