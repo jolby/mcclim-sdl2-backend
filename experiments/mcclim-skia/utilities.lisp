@@ -10,6 +10,25 @@
   macro expansion!\""
   (declare (ignore body)))
 
+(defun round-coordinate (x)
+  (floor (+ x .5)))
+
+(defun ensure-string-value (v)
+  (etypecase v
+    (string v)
+    (character (string v))))
+
+(defun %unit-float->u8 (f-comp)
+  (logand (truncate (* f-comp 255)) 255))
+
+(defun %ink->color32argb (ink)
+  (multiple-value-bind (red green blue alpha)
+      (clime::color-rgba ink)
+    (logior (ash (%unit-float->u8 alpha) 24)
+            (ash (%unit-float->u8 red) 16)
+            (ash (%unit-float->u8 green) 8)
+            (ash (%unit-float->u8 blue) 0))))
+
 (defun %display-info (&optional (display-index 0))
     (cffi:with-foreign-objects ((ddpi :float)
                                 (hdpi :float)
@@ -41,8 +60,6 @@
    :DISPLAY-W 2256 :DISPLAY-H 1504
    :DISPLAY-INCHES-W 14.72441 :DISPLAY-INCHES-H 9.80315
    :DISPLAY-MM-W 374.0 :DISPLAY-MM-H 249.00002)
-
-
 )
 
 (defun enumval (enum value)
@@ -99,8 +116,9 @@
        (if (cffi:null-pointer-p ,wrapper)
            (error 'skia-error :string (or ,err-msg (format nil "~A can't be null pointer!" (quote ,form))))
            ,wrapper))))
-;;
-;; Structured cleanups
+;;;
+;;; Structured cleanups
+;;;
 (defvar *cleanup-context* nil)
 (defvar *cleanup-context-chain* nil)
 (declaim (special *cleanup-context* *cleanup-context-chain*))

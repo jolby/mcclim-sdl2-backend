@@ -1,31 +1,5 @@
 (in-package #:mcclim-skia)
 
-(defun round-coordinate (x)
-  (floor (+ x .5)))
-
-(defun ensure-string-value (v)
-  (etypecase v
-    (string v)
-    (character (string v))))
-
-(defclass skia-opengl-medium (basic-medium)
-  ;;XXX do we want skia canvas as a slot or as a special dynamic var? The
-  ;;skia-canvas will need to be invalidated on screen resizes and maybe other
-  ;;situations as well.
-  ((skia-canvas :initarg :skia-canvas :accessor skia-canvas)
-   (%paint-stack :initarg nil
-                :initform (make-array 1 :fill-pointer 0 :adjustable t)
-                :accessor medium-paint-stack)
-   (%font-stack :initarg nil
-                :initform (make-array 1 :fill-pointer 0 :adjustable t)
-                :accessor medium-font-stack)
-   ;; Maybe make this a deferred-drawing-mixin???
-   (%deferred-command-queue :initarg nil
-                           :initform (make-array 128 :fill-pointer 0 :adjustable t :initial-element nil)
-     :accessor medium-deferred-command-queue)
-
-   ))
-
 (defmethod make-medium ((port mcclim-sdl2::sdl2-port) (sheet sdl2-skia-top-level-sheet))
   (make-instance 'skia-opengl-medium :port port :skia-canvas nil))
 
@@ -81,6 +55,63 @@
           (progn ,@body)
        (%pop-font ,medium))))
 
+(defun push-paint-command (medium &key (color32argb #xFF000000) (stroke-width 1)
+                                    (stroke-style :stroke-and-fill-style)
+                                    (stroke-cap :butt-cap) (join-cap :miter-join))
+  (let ((new-paint (%push-paint medium)))
+    (skia-core::set-paint-color32argb new-paint color32argb)
+    (skia-core::set-paint-style new-paint stroke-style)
+    (skia-core::set-paint-stroke-cap new-paint stroke-cap)
+    (skia-core::set-paint-stroke-join new-paint join-cap)
+    (skia-core::set-paint-stroke-width new-paint stroke-width)
+    (skia-core::set-paint-anti-alias new-paint t)))
+
+(defun pop-paint-command (medium)
+  (%pop-paint medium))
+
+(defun %capture-paint-to-command-queue (medium ink line-style)
+  (let* ((color32argb (%ink->color32argb ink))
+         (ls-cap (line-style-cap-shape line-style))
+         (ls-join (line-style-joint-shape line-style))
+         (ls-width (line-style-thickness line-style)))
+    (push-command medium #'push-paint-command medium
+                  :color32argb color32argb :stroke-width ls-width
+                  :stroke-cap (%paint-style-lookup ls-cap *cap-map*)
+                  :join-cap (%paint-style-lookup ls-join *join-map*))))
+
+
+
+(defun push-font-command (medium &key (color32argb #xFF000000)
+                                   (size (text-style-size *default-text-style*))
+                                   (face (text-style-face *default-text-style*))
+                                   (family (text-style-family *default-text-style*)))
+  (let ((new-paint (%push-paint medium))
+        (new-font (%push-font medium (canvas::get-typeface family face))))
+    (skia-core::set-font-size size)
+    (skia-core::set-paint-color32argb new-paint color32argb)
+    (skia-core::set-paint-style new-paint :stroke-and-fill-style)
+    (skia-core::set-paint-anti-alias new-paint t)
+    ))
+
+(defun pop-font-command (medium)
+  (%pop-font medium)
+  (%pop-paint medium))
+
+(defun %capture-font-to-command-queue (medium ink text-style)
+  (let* ((color32argb (%ink->color32argb ink)))
+    (push-command medium #'push-font-command medium :color32argb color32argb
+                                                    :size (text-style-size text-style)
+                                                    :face (text-style-face text-style)
+                                                    :family (text-style-family text-style))))
+
+(defun sk-font-needs-change-p (ink text-style &optional (font canvas::*font*))
+  (let* ((changelist)
+         (ts-size (clim-internals::normalize-font-size (text-style-size text-style)))
+         (f-size (skia-core::font-size font)))
+    (unless (= ts-size f-size) (push :size changelist)))
+  changelist)
+
+
 ;;:butt-cap :round-cap :square-cap :last-cap :default-cap
 ;; :butt :square :round :no-end-point (default :butt)
 (defvar *cap-map*
@@ -108,7 +139,6 @@
         :when (eq l ls)
           :return p))
 
-
 (defun sk-paint-needs-change-p (ink line-style &optional (paint canvas::*paint*))
   (let* ((changelist)
          (ls-cap (line-style-cap-shape line-style))
@@ -126,9 +156,6 @@
     ;;XXX TODO dashes and other path effects... gradients,shadow,glow,blur etc effects?
   changelist))
 
-(defun sk-font-needs-change-p (ink text-style &optional (font canvas::*font*))
-  t)
-
 (defun %invoke-with-capturing-medium-state (medium continuation)
   (let* ((ink (medium-ink medium))
          (line-style (medium-line-style medium))
@@ -136,18 +163,40 @@
          (clip (medium-clipping-region medium))
          (transform (medium-transformation medium))
          (paint-change-p (sk-paint-needs-change-p ink line-style))
-         ;; (font-change-p (sk-font-needs-change-p ink text-style))
+         (font-change-p (sk-font-needs-change-p ink text-style))
         )
     (when paint-change-p (%capture-paint-to-command-queue medium ink line-style))
+    (when font-change-p (%capture-font-to-command-queue medium ink text-style))
     (unwind-protect
          (progn
            (funcall continuation)
            )
+      (when font-change-p (push-command medium #'%pop-font medium))
       (when paint-change-p (push-command medium #'%pop-paint medium)))))
 
+;;
+;; Draw OP recording
+;;
+(defmacro with-medium-to-skia-drawing-recorder ((medium) &body body)
+  (alx:with-gensyms (ink line-style text-style clip transform)
+    `(let* ((,ink (medium-ink ,medium))
+            (,line-style (medium-line-style ,medium))
+            (,text-style (medium-text-style ,medium))
+            (,clip (medium-clipping-region ,medium))
+            (,transform (medium-transformation ,medium))
+            )
+       (%capture-paint-to-command-queue ,medium ,ink ,line-style)
+       (%capture-font-to-command-queue ,medium ,ink ,line-style)
 
-;;XXX need to separate medium state capturing/recording
-;;from skia playback
+       (unwind-protect
+            (progn ,@body)
+         (push-command medium #'pop-font-command medium)
+         (push-command medium #'pop-paint-command medium)
+         ))))
+
+;;
+;; Draw OP playback
+;;
 (defmacro with-skia-canvas ((medium) &body body)
   (alx:once-only (medium)
     (alx:with-gensyms (gskia-draw-op)
@@ -167,133 +216,6 @@
                )
              ))
          ))))
-
-(defun %unit-float->u8 (f-comp)
-  (logand (truncate (* f-comp 255)) 255))
-
-(defun %ink->color32argb (ink)
-  (multiple-value-bind (red green blue alpha)
-      (clime::color-rgba ink)
-    (logior (ash (%unit-float->u8 alpha) 24)
-            (ash (%unit-float->u8 red) 16)
-            (ash (%unit-float->u8 green) 8)
-            (ash (%unit-float->u8 blue) 0))))
-
-(defun push-paint-command (medium &key (color32argb #xFF000000) (stroke-width 1)
-                                    (stroke-style :stroke-and-fill-style)
-                                    (stroke-cap :butt-cap) (join-cap :miter-join))
-  (let ((new-paint (%push-paint medium)))
-    (skia-core::set-paint-color32argb new-paint color32argb)
-    (skia-core::set-paint-style new-paint stroke-style)
-    (skia-core::set-paint-stroke-cap new-paint stroke-cap)
-    (skia-core::set-paint-stroke-join new-paint join-cap)
-    (skia-core::set-paint-stroke-width new-paint stroke-width)
-    (skia-core::set-paint-anti-alias new-paint t)))
-
-(defun %capture-paint-to-command-queue (medium ink line-style)
-  (let* ((color32argb (%ink->color32argb ink))
-         (ls-cap (line-style-cap-shape line-style))
-         (ls-join (line-style-joint-shape line-style))
-         (ls-width (line-style-thickness line-style)))
-      (push-command medium #'push-paint-command medium
-                    :color32argb color32argb :stroke-width ls-width
-                    :stroke-cap (%paint-style-lookup ls-cap *cap-map*)
-                    :join-cap (%paint-style-lookup ls-join *join-map*))))
-
-
-
-(defun push-font-command (medium &key (color32argb #xFF000000)
-                                   (size (text-style-size *default-text-style*))
-                                   (face (text-style-face *default-text-style*))
-                                   (family (text-style-family *default-text-style*)))
-  (let ((new-paint (%push-paint medium))
-        (new-font (%push-font medium (canvas::get-typeface family face))))
-    (skia-core::set-font-size size)
-    (skia-core::set-paint-color32argb new-paint color32argb)
-    (skia-core::set-paint-style new-paint :stroke-and-fill-style)
-    (skia-core::set-paint-anti-alias new-paint t)
-    ))
-
-
-(defun %capture-font-to-command-queue (medium ink text-style)
-  (let* ((color32argb (%ink->color32argb ink)))
-    (push-command medium #'push-font-command medium :color32argb color32argb
-                                                    :size (text-style-size text-style)
-                                                    :face (text-style-face text-style)
-                                                    :family (text-style-family text-style))))
-
-  (defun pop-paint-command (medium)
-    (%pop-paint medium))
-
-  (defun pop-font-command (medium)
-    (%pop-font medium)
-    (%pop-paint medium))
-
-(defmacro with-medium-to-skia-drawing-recorder ((medium) &body body)
-  (alx:with-gensyms (ink line-style text-style clip transform)
-    `(let* ((,ink (medium-ink ,medium))
-            (,line-style (medium-line-style ,medium))
-            (,text-style (medium-text-style ,medium))
-            (,clip (medium-clipping-region ,medium))
-            (,transform (medium-transformation ,medium))
-            )
-       (%capture-paint-to-command-queue ,medium ,ink ,line-style)
-       (%capture-font-to-command-queue ,medium ,ink ,line-style)
-
-       (unwind-protect
-            (progn ,@body)
-         (push-command medium #'pop-font-command medium)
-         (push-command medium #'pop-paint-command medium)
-         ))))
-
-;;;
-;;; DRAW COMMAND
-;;;
-(defstruct (draw-command
-            (:constructor make-draw-command ())
-            (:conc-name %draw-command-))
-  (name nil)
-  (arguments nil))
-
-(defun update-draw-command (command name &rest arguments)
-  (setf (%draw-command-name command) name
-        (%draw-command-arguments command) arguments))
-
-(defun invoke-draw-command (command)
-  (log:info "CMD: ~a" (%draw-command-name command))
-  (apply (%draw-command-name command) (%draw-command-arguments command)))
-
-;;;
-;;; COMMAND QUEUE
-;;;
-(defvar *command-queue-lock* (bt:make-lock))
-
-
-(defun push-command (medium name &rest args)
-  (bt:with-lock-held (*command-queue-lock*)
-    (let* ((queue (medium-deferred-command-queue medium))
-           (fp (fill-pointer queue)))
-      (if (= fp (array-total-size queue))
-          (vector-push-extend nil queue 128)
-          (setf (fill-pointer queue) (1+ fp)))
-      (let ((next-command (alx:if-let ((next-command (aref queue fp)))
-                            next-command
-                            (setf (aref queue fp) (make-draw-command)))))
-        (apply #'update-draw-command next-command name args))) )
-  (values))
-
-(defun drain-draw-commands (medium)
-  (bt:with-lock-held (*command-queue-lock*)
-    (let ((array (medium-deferred-command-queue medium)))
-      (unwind-protect
-           (loop for command across array
-                 do (invoke-draw-command command)
-                    (update-draw-command command nil))
-        (setf (fill-pointer array) 0)))) )
-
-(defun discard-command-queue (medium)
-  (setf (fill-pointer (medium-deferred-command-queue medium)) 0)
-  (values))
 
 (defmethod medium-draw-line* ((medium skia-opengl-medium) x1 y1 x2 y2)
   (with-skia-canvas (medium)

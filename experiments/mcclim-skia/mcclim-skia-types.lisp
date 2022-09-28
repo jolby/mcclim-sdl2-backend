@@ -33,3 +33,20 @@
   ())
 
 (defclass sdl2-skia-window (sdl2-skia-top-level-sheet basic-pane) ())
+
+(defclass skia-opengl-medium (basic-medium)
+  ;;XXX do we want skia canvas as a slot or as a special dynamic var? The
+  ;;skia-canvas will need to be invalidated on screen resizes and maybe other
+  ;;situations as well.
+  ((skia-canvas :initarg :skia-canvas :accessor skia-canvas)
+   (%paint-stack :initarg nil
+                :initform (make-array 1 :fill-pointer 0 :adjustable t)
+                :accessor medium-paint-stack)
+   (%font-stack :initarg nil
+                :initform (make-array 1 :fill-pointer 0 :adjustable t)
+                :accessor medium-font-stack)
+   ;; Maybe make this a deferred-drawing-mixin???
+   (%deferred-command-queue :initarg nil
+                           :initform (make-array 128 :fill-pointer 0 :adjustable t :initial-element nil)
+     :accessor medium-deferred-command-queue)
+   ))

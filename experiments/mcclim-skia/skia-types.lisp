@@ -24,7 +24,7 @@
 (defun %unit-float->u8 (f-comp)
   (logand (truncate (* f-comp 255)) 255))
 
-(defun color32-values (color32)
+(defun color32-u8-values (color32)
   (values (logand 255 (ash color32 -24))
           (logand 255 (ash color32 -16))
           (logand 255 (ash color32 -8))
@@ -96,7 +96,7 @@
             (ash (%unit-float->u8 alpha) 0))))
 
 (comment
-  (color32-values #xef00ff80)
+  (color32-u8-values #xef00ff80)
   (color32-float-values #xefccff80)
   (with-color4f (rc (make-color4f 1 0 0 .5))
     (color4f-rgba-values rc))
@@ -438,6 +438,11 @@
    (%skia:get-typeface-or-default
     :const
     '(claw-utils:claw-pointer %skia:sk-font) font)))
+
+(defun font-size (font)
+  (%skia:get-size
+   :const
+   '(claw-utils:claw-pointer %skia:sk-font) font))
 
 (defun set-font-size (font size)
   (%skia:set-size

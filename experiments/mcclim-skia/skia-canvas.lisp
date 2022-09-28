@@ -227,15 +227,9 @@
      '(claw-utils:claw-pointer %skia:sk-font) *font*
      :bool (and subpixeled t))))
 
-;;;;
-;;;; Material Ops
-;;;;
-
-
-;; void drawShadowedPath(SkCanvas* canvas, const SkPath& path,
-;;                           const SkPoint3& zPlaneParams,
-;;                           const SkPaint& paint, SkScalar ambientAlpha,
-;;                           const SkPoint3& lightPos, SkScalar lightRadius, SkScalar spotAlpha)
+;;;
+;;; Material Ops
+;;;
 (defun draw-shadowed-path (path paint z-plane
                            &key
                              ;;Maybe don't take light-pos param? Could be source of leak
@@ -247,72 +241,21 @@
                              (canvas *canvas*))
   (let ((z-plane3 (skia-core::make-point3 0 0 z-plane))
         (light-pos3 (if light-pos-p light-pos (skia-core::make-point3 0 -700 700)))
-        )
+        (ambient-color (skia-core::with-color4f (amb-c (skia-core::make-color4f 0 0 0 ambient-alpha))
+                         (skia-core::color4f->color32argb amb-c)))
+        (spot-color (skia-core::with-color4f (spot-c (skia-core::make-color4f 0 0 0 spot-alpha))
+                         (skia-core::color4f->color32argb spot-c))))
     (unwind-protect
          (progn
-           (%skia::sk-shadow-utils+draw-shadow canvas path z-plane3
-                                               light-pos3 light-radius
-                                               ))
+           (%skia::sk-shadow-utils+draw-shadow '(claw-utils:claw-pointer %skia::sk-canvas) canvas
+                                               '(claw-utils:claw-pointer %skia::sk-path) path
+                                               '(claw-utils:claw-pointer %skia::sk-point3) z-plane3
+                                               '(claw-utils:claw-pointer %skia::sk-point3) light-pos3
+                                               '%skia::sk-scalar light-radius
+                                               '%skia::sk-color ambient-color
+                                               '%skia::sk-color spot-color
+                                               '%skia::uint32-t shadow-flags)
+           (path path :paint paint))
       (skia-core::destroy-point3 z-plane3)
-      (unless light-pos-p (skia-core::destroy-point3 light-pos3)))
-    ))
+      (unless light-pos-p (skia-core::destroy-point3 light-pos3)))))
 
-(comment
-
-(defun draw-skia (canvas)
-  (%skia:clear '(:pointer %skia::sk-canvas) canvas
-               '%skia::sk-color %skia:+sk-color-transparent+)
-  (let ((time (/ (get-internal-real-time) internal-time-units-per-second)))
-    (iffi:with-intricate-instances ((paint %skia:sk-paint))
-      (%skia:set-color '(:pointer %skia::sk-paint) paint
-                       '%skia::sk-color %skia:+sk-color-yellow+)
-      (iffi:with-intricate-alloc (rect %skia:sk-rect)
-        (%skia:sk-rect+make-xywh
-         '(:pointer %skia::sk-rect) rect
-         '%skia::sk-scalar (float (floor (+ 300 (* 100 (cos (* 10 time))))) 0f0)
-         '%skia::sk-scalar (float (floor (+ 300 (* 100 (sin (* 10 time))))) 0f0)
-         '%skia::sk-scalar 500f0
-         '%skia::sk-scalar 500f0)
-        (%skia:draw-rect
-         '(:pointer %skia::sk-canvas) canvas
-         '(:pointer %skia::sk-rect) rect
-         '(:pointer %skia::sk-paint) paint))
-      (%skia:set-color '(:pointer %skia::sk-paint) paint
-                       '%skia::sk-color %skia:+sk-color-cyan+)
-      (%skia:draw-circle
-       '(:pointer %skia::sk-canvas) canvas
-       '%skia::sk-scalar (float (floor (+ 400 (* 150 (sin (* 5 time))))) 0f0)
-       '%skia::sk-scalar (float (floor (+ 600 (* 150 (cos (* 1 time))))) 0f0)
-       '%skia::sk-scalar 150f0
-       '(:pointer %skia::sk-paint) paint)))
-  (%skia:flush '(:pointer %skia::sk-canvas) canvas))
-
-
-(defun call-with-skia-canvas (framebuffer-id width height action)
-  (let* ((interface-sp (make-native-gl-interface))
-         (context-sp (make-gl-context interface-sp))
-         (interface (%skia:get :const '(:pointer %skia::sk-sp<const+gr-gl-interface>) interface-sp))
-         (context (%skia:get :const '(:pointer %skia::sk-sp<gr-direct-context>) context-sp)))
-    (iffi:with-intricate-instances ((framebuffer %skia:gr-gl-framebuffer-info)
-                                    (surface-props %skia:sk-surface-props))
-      (iffi:with-intricate-slots %skia:gr-gl-framebuffer-info
-          ((fbo-id %skia:f-fboid)
-           (format %skia:f-format))
-          framebuffer
-        (setf fbo-id framebuffer-id
-              format #x8058)) ;; #define GR_GL_RGBA8 0x8058
-      (iffi:with-intricate-instance
-          (render-target %skia:gr-backend-render-target
-                         :int width
-                         :int height
-                         :int 0
-                         :int 8
-                         '(:pointer %skia::gr-gl-framebuffer-info) framebuffer)
-        (let* ((surface-sp (make-surface-from-backend-render-target context render-target surface-props))
-               (surface (%skia:get :const '(:pointer %skia::sk-sp<sk-surface>) surface-sp))
-               (canvas (%skia:get-canvas '(:pointer %skia::sk-surface) surface)))
-          (funcall action canvas))))))
-
-
-
-  )
