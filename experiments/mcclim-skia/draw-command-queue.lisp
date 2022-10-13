@@ -39,6 +39,7 @@
 (defun drain-draw-commands (medium)
   (bt:with-lock-held (*command-queue-lock*)
     (let ((array (medium-deferred-command-queue medium)))
+      (log:info "fill pointer: ~a" (fill-pointer array))
       (unwind-protect
            (loop for command across array
                  do (invoke-draw-command command)

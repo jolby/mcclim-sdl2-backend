@@ -34,6 +34,11 @@
 
 (defclass sdl2-skia-window (sdl2-skia-top-level-sheet basic-pane) ())
 
+
+;;;;
+;;;;
+;;;; Skia Medium
+;;;;
 (defclass skia-opengl-medium (basic-medium)
   ;;XXX do we want skia canvas as a slot or as a special dynamic var? The
   ;;skia-canvas will need to be invalidated on screen resizes and maybe other

@@ -116,7 +116,7 @@
 ;; for hex-encoded 32argb representation
 ;; ... later also accept keywords for different colorspaces HSL etc...
 ;; (defun make-color (&rest args))
-(defun make-paint ()
+(defun %make-paint ()
   (iffi:make-intricate-instance '%skia:sk-paint))
 
 (defun destroy-paint (paint)
@@ -213,6 +213,14 @@
           paint (get-paint-color32argb paint) (get-paint-style paint) (paint-anti-alias-p paint)
           (get-paint-stroke-width paint) (get-paint-stroke-miter paint)
           (get-paint-stroke-cap paint) (get-paint-stroke-join paint)))
+
+(defun make-paint (&key (color #xFF000000) (stroke-width 1) (style :fill-style))
+  (let ((paint (iffi:make-intricate-instance '%skia:sk-paint)))
+    (set-paint-color32argb paint color)
+    (set-paint-stroke-width paint stroke-width)
+    (set-paint-style paint style)
+    paint))
+
 ;;
 ;; Geometric objects
 ;;

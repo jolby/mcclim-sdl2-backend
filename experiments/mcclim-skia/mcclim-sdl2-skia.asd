@@ -16,6 +16,7 @@
                (:file "mirror-opengl")
                (:file "mirror-skia")
                (:file "draw-command-queue")
+               (:file "mcclim-skia-state")
                (:file "medium-skia")
                (:file "skia-sheet")
                ))

@@ -55,13 +55,6 @@
    (asdf:component-pathname
     (asdf:find-component "clim-examples" '("images" "glider.png")))))
 
-(defclass skia-mirrored-sheet-mixin (mirrored-sheet-mixin) ())
-
-(defclass sdl2-skia-top-level-sheet
-    (top-level-sheet-mixin skia-mirrored-sheet-mixin basic-sheet)
-  ())
-
-(defclass sdl2-skia-window (sdl2-skia-top-level-sheet basic-pane) ())
 
 (defclass skia-app-sheet (;; repainting
                           immediate-repainting-mixin
@@ -69,6 +62,7 @@
                           immediate-sheet-input-mixin
                           ;; output
                           permanent-medium-sheet-output-mixin
+                          standard-output-recording-stream
                           ;;temporary-medium-sheet-output-mixin
                           ;;sheet-with-medium-mixin
                           ;;sheet-mute-output-mixin
@@ -85,6 +79,7 @@
                      :pretty-name "McCLIM Skia Test Sheet"
                      ;; :region (make-rectangle* -200 -200 1080 720)
                      :region (make-rectangle* 0 0 1080 720)
+                     ;; :buffering-p t
    ))
 
 (defmethod medium-clear-area ((sheet skia-app-sheet) left top right bottom)
@@ -93,7 +88,7 @@
     (push-command medium #'canvas::clear-canvas))))
 
 (defun simple-draw (sheet)
-  (let ((medium sheet))
+  (let ((medium (sheet-medium sheet)))
     (with-bounding-rectangle* (x1 y1 x2 y2) medium
       (log:info "bounding rect: x1: ~a, y1: ~a, x2: ~a, y2: ~a" x1 y1 x2 y2)
       (medium-clear-area medium x1 y1 x2 y2)
