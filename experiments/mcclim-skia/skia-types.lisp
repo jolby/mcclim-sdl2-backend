@@ -120,6 +120,7 @@
   (iffi:make-intricate-instance '%skia:sk-paint))
 
 (defun destroy-paint (paint)
+  ;;XXX does this also destroy the color4f owned by the paint???
   (iffi:destroy-intricate-instance '%skia:sk-paint paint))
 
 (defmacro with-paint ((paint-sym) &body body)
@@ -414,6 +415,9 @@
   (iffi:intricate-free typeface)
   (values))
 
+(defun typeface-equal-p (tf1 tf2)
+  (%skia::sk-typeface+equal tf1 tf2))
+
 (defun %typeface-family-name (typeface-ptr)
   (unless (cffi:null-pointer-p typeface-ptr)
     (iffi:with-intricate-instance (sk-str %skia:sk-string)
@@ -440,6 +444,11 @@
 
 (defun destroy-font (font)
   (iffi:destroy-intricate-instance '%skia:sk-font font))
+
+(defun font-typeface (font)
+   (%skia:get-typeface
+    :const
+    '(claw-utils:claw-pointer %skia:sk-font) font))
 
 (defun font-family-name (font)
   (%typeface-family-name

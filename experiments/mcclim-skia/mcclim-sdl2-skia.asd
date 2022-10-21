@@ -3,7 +3,8 @@
 (defsystem "mcclim-sdl2-skia"
   :author "Daniel Kochmański (McCLIM, SDL backend). Pavel Korlev (claw, skia bindings). Joel Boehland (mcclim-skia hacks)."
   :description "SDL2 backend"
-  :depends-on ("mcclim" "sdl2" "mcclim-sdl2" "mcclim-sdl2-skia/blob"
+  :depends-on ("mcclim" "mcclim-fonts" "mcclim-fonts/truetype"
+                        "sdl2" "mcclim-sdl2" "mcclim-sdl2-skia/blob"
                         "log4cl" "lparallel" "cl-opengl" "aw-skia" "static-vectors")
   :serial t
   :components ((:file "packages")

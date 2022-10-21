@@ -20,25 +20,147 @@
               skia-canvas)
             (error "Unable to lookup skia-canvas from medium: ~a" medium)))))
 
-(defun %medium-has-pending-draw-ops-p (medium)
-  (bt:with-lock-held (*command-queue-lock*)
-    (let ((array (medium-deferred-command-queue medium)))
-      (log:info "fill pointer: ~a" (fill-pointer array))
-      (> (fill-pointer array) 0))))
+(defun %ensure-medium-skia-paint (medium)
+  (if-let ((skia-paint (medium-skia-paint medium)))
+    skia-paint
+    (setf (medium-skia-paint medium) (skia-core::make-paint))))
+
+(defun %ensure-medium-skia-font-paint (medium)
+  (if-let ((skia-font-paint (medium-skia-font-paint medium)))
+    skia-font-paint
+    (setf (medium-skia-font-paint medium) (skia-core::make-paint))))
+
+;;; secondary methods for changing text styles and line styles and syncing with
+;;; corresponding skia paint/font styles
+(defun %translate-cap-shape (clim-cap-shape)
+  (case clim-cap-shape
+    (:butt    :butt-cap)
+    (:square  :square-cap)
+    (:round   :round-cap)
+    (otherwise :butt-cap)))
+
+(defun %translate-join-shape (clim-join-shape)
+  (case clim-join-shape
+    (:miter  :miter-join)
+    (:none   :miter-join)
+    (:bevel  :bevel-join)
+    (:round  :round-join)
+    (otherwise :miter-join)))
+
+(defun %update-dash-pattern (medium new-dashes)
+  (log:warn "Not implemented"))
+
+(defun %update-skia-paint-from-ink (medium ink)
+  (let ((skia-paint (%ensure-medium-skia-paint medium))
+        (skia-font-paint (%ensure-medium-skia-font-paint medium)))
+    (multiple-value-bind (red green blue alpha) (clime::color-rgba ink)
+      (skia-core::set-paint-color4f skia-paint red green blue alpha)
+      (skia-core::set-paint-color4f skia-font-paint red green blue alpha))))
+
+(defmethod (setf medium-ink) :before (ink (medium skia-opengl-medium))
+  (let ((old-ink (medium-ink medium)))
+    (unless (eq ink old-ink)
+      (%update-skia-paint-from-ink medium ink))))
+
+(defun %update-skia-paint-from-line-style (medium line-style)
+  (let* ((skia-paint (%ensure-medium-skia-paint medium))
+         (line-style (medium-line-style medium)))
+    (skia-core::set-paint-width skia-paint
+                                (round (line-style-effective-thickness line-style medium)))
+    (skia-core::set-paint-stroke-cap skia-paint
+                                     (%translate-cap-shape (line-style-cap-shape line-style)))
+    (skia-core::set-paint-stroke-join skia-paint
+                                      (%translate-join-shape (line-style-joint-shape line-style)))
+    (%update-dash-pattern medium (line-style-dashes line-style))))
+
+(defmethod (setf medium-line-style) :before (new-value (medium skia-opengl-medium))
+  (let* ((skia-paint (%ensure-medium-skia-paint medium))
+         (old-line-style (medium-line-style medium))
+         (old-unit (line-style-unit old-line-style))
+         (new-unit (line-style-unit new-value))
+         (new-cap-shape (line-style-cap-shape new-value))
+         (new-joint-shape (line-style-joint-shape new-value)))
+    (unless (and (eq new-unit old-unit)
+                 (eql (line-style-thickness new-value)
+                      (line-style-thickness old-line-style)))
+      (skia-core::set-paint-width skia-paint
+            (round (line-style-effective-thickness new-value medium))))
+    (unless (eq new-cap-shape (line-style-cap-shape old-line-style))
+      (skia-core::set-paint-stroke-cap skia-paint
+            (%translate-cap-shape new-cap-shape)))
+    (unless (eq new-joint-shape (line-style-joint-shape old-line-style))
+      (skia-core::set-paint-stroke-join skia-paint
+            (%translate-join-shape new-joint-shape)))
+    (unless (and new-unit old-unit
+                 (eq (line-style-dashes new-value)
+                     (line-style-dashes old-line-style)))
+      (%update-dash-pattern medium (line-style-dashes new-value)))))
+
+(defun %font-file-path-from-text-style (text-style)
+  (multiple-value-bind (family face size)
+      (text-style-components text-style)
+    (alx:assoc-value mcclim-truetype::*families/faces* (list family face) :test #'equal)))
+
+(defun %load-skia-typeface (font-path)
+  (unless (uiop/filesystem:file-exists-p font-path)
+      (error (format nil "File: ~a doesn't exist!" font-path)))
+    (let* ((file-bytes-vec (skia-core::read-file-into-shareable-vector font-path))
+           (typeface (skia-core::make-typeface file-bytes-vec)))
+      typeface))
+
+(defun %swap-skia-font (medium new-font)
+  (if-let ((old-font (medium-skia-font medium)))
+           (skia-core::destroy-font old-font))
+  (setf (medium-skia-font medium) new-font))
+
+(defun %update-skia-font-from-text-style (medium text-style)
+  (let ((skia-font (medium-skia-font medium))
+        (text-size (text-style-size text-style))
+        (font-path (%font-file-path-from-text-style text-style))
+        (font-paint (%ensure-medium-skia-font-paint medium)))
+    (unless font-path (error "Error finding font-path for text-style: ~a" text-style))
+    (let ((skia-typeface skia-typeface-exists-p) (gethash font-path (fontpath->skia-typeface (port medium))))
+      (unless skia-typeface-exists-p
+        (setf skia-typeface (%load-skia-typeface font-path))
+        (unless skia-typeface (error "Error loading skia-typeface for font-path: ~a" font-path))
+        (setf (gethash font-path (fontpath->skia-typeface (port medium))) skia-typeface))
+      (if (and skia-font
+               (skia-core::typeface-equal-p skia-typeface (skia-core::font-typeface skia-font)))
+          (unless (= text-size (skia-core::font-size skia-font))
+                (skia-core::set-font-size skia-font text-size))
+          (let ((new-font (skia-core::make-font skia-typeface)))
+            (skia-core::set-font-size new-font text-size)
+            (skia-core::set-paint-style font-paint :stroke-and-fill-style)
+            (skia-core::set-paint-anti-alias font-paint t)
+            (%swap-skia-font medium new-font))))))
+
+(defmethod (setf medium-text-style) :before (text-style (medium skia-opengl-medium))
+  (let ((old-text-style (medium-text-style medium)))
+    (unless (eq text-style old-text-style)
+      (let ((text-style-mapping (text-style-mapping (port medium) text-style)))
+        (log:info "changing text-style-mapping to: ~a, from: ~a" text-style-mapping old-text-style)
+        (%update-skia-font-from-text-style medium text-style)))))
+
+(defmethod initialize-instance :after ((medium skia-opengl-medium) &rest args)
+  (declare (ignore args))
+  (let ((ink (medium-ink medium))
+        (line-style (medium-line-style medium))
+        (text-style (medium-text-style medium))))
+  (log:info "")
+  (%update-skia-paint-from-ink medium ink)
+  (%update-skia-paint-from-line-style medium line-style)
+  (%update-skia-font-from-text-style text-style))
 
 (defun %invoke-with-skia-drawing-state-synced-with-medium (medium continuation)
   (declare (ignorable medium continuation))
   (funcall continuation))
 ;;
-;; Draw OP playback
+;; Draw OPs playback
 ;;
 (defmacro with-skia-canvas ((medium) &body body)
   (alx:once-only (medium)
     (alx:with-gensyms (gskia-draw-op)
-      `(let ((canvas::*canvas* (%lookup-skia-canvas ,medium))
-             ;;XXX TODO remove need for these
-             ;;(canvas::*paint* (if (boundp 'canvas::*paint*) canvas::*paint* (skia-core::make-paint)))
-             )
+      `(let ((canvas::*canvas* (%lookup-skia-canvas ,medium)))
          (with-paint (medium)
            (with-font (medium canvas::*default-typeface*)
              ;; (log:info "XXX paint: ~a" canvas::*paint*)

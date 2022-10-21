@@ -89,15 +89,14 @@
 
 (defun simple-draw (sheet)
   (let ((medium (sheet-medium sheet)))
-    (with-bounding-rectangle* (x1 y1 x2 y2) medium
+    (with-bounding-rectangle* (x1 y1 x2 y2) sheet
       (log:info "bounding rect: x1: ~a, y1: ~a, x2: ~a, y2: ~a" x1 y1 x2 y2)
       (medium-clear-area medium x1 y1 x2 y2)
       (draw-rectangle* medium
                        (+ x1 10) (+ y1 10)
                        (- x2 10) (- y2 10)
                        :ink +deep-sky-blue+)
-      (draw-circle* medium 10 10 25 :ink (alexandria:random-elt
-                                        (make-contrasting-inks 8)))
+      (draw-circle* medium 10 10 25 :ink (alexandria:random-elt (make-contrasting-inks 8)))
       (draw-point* medium 100 100 :ink +black+ :line-thickness 8)
       (draw-text* medium "(100,100)" 100 100)
       (draw-line* medium 10 10 500 500 :ink +red+ :line-thickness 4)
@@ -170,8 +169,7 @@
     (setf *skia-port* port)
     (unless *skia-default-typeface* (load-test-font))
     (let* (;; Supplying :PORT here is a kludge in the core.
-          (sheet
-(make-instance 'skia-app-sheet :port port))
+          (sheet (make-instance 'skia-app-sheet :port port))
           (graft (find-graft :port port))
           (mirror (realize-mirror port sheet)))
       (sheet-adopt-child graft sheet)
@@ -192,11 +190,11 @@
 
   (load-test-font)
 
-  (defparameter *skia-port* (find-port :server-path :sdl2))
+  (defparameter *skia-port* (find-port :server-path :sdl2-ttf))
   (defparameter *skia-sheet* (make-instance 'skia-app-sheet :port *skia-port*))
   (defparameter *skia-sheet* (open-skia-sheet :sdl2 t))
 
-  (open-skia-sheet :sdl2 t)
+  (open-skia-sheet :sdl2-ttf t)
   (let ((result (do-simple-draw *skia-sheet* :synchronize t)))
     (if (typep result 'condition)
         (error result)
@@ -205,5 +203,5 @@
   (sheet-direct-mirror *skia-sheet*)
   (close-skia-sheet *skia-sheet*)
   (nuke-state)
-  (destroy-port (find-port :server-path :sdl2))
+  (destroy-port (find-port :server-path :sdl2-ttf))
 )
