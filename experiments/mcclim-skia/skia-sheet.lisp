@@ -82,11 +82,6 @@
                      ;; :buffering-p t
    ))
 
-(defmethod medium-clear-area ((sheet skia-app-sheet) left top right bottom)
-  (let ((medium (sheet-medium sheet)))
-    (with-skia-canvas (medium)
-    (push-command medium #'canvas::clear-canvas))))
-
 (defun simple-draw (sheet)
   (let ((medium (sheet-medium sheet)))
     (with-bounding-rectangle* (x1 y1 x2 y2) sheet
@@ -98,7 +93,9 @@
                        :ink +deep-sky-blue+)
       (draw-circle* medium 10 10 25 :ink (alexandria:random-elt (make-contrasting-inks 8)))
       (draw-point* medium 100 100 :ink +black+ :line-thickness 8)
-      (draw-text* medium "(100,100)" 100 100)
+      (draw-text* medium "(100,100)" 100 100
+                  :text-style (make-text-style :sans-serif :roman 32)
+                  :ink +red+)
       (draw-line* medium 10 10 500 500 :ink +red+ :line-thickness 4)
       (draw-point* medium 10 10 :ink +green+ :line-thickness 8)
       (draw-point* medium 500 500 :ink +red+ :line-thickness 8)
@@ -110,6 +107,8 @@
 
 ;;XXX REMEMBER: all drawing calls must be submitted to the main SDL
 ;;rendering thread. If not, you'll just get a black window.
+;;XXX Not so sure about this actually. Maybe just the canvas::flush and
+;;swap buffer calls need to be on main SDL thread???
 (mcclim-sdl2::define-sdl2-request do-simple-draw (sheet)
   (simple-draw *skia-sheet*))
 
@@ -190,11 +189,11 @@
 
   (load-test-font)
 
-  (defparameter *skia-port* (find-port :server-path :sdl2-ttf))
+  (defparameter *skia-port* (find-port :server-path :sdl2-skia-ttf))
   (defparameter *skia-sheet* (make-instance 'skia-app-sheet :port *skia-port*))
   (defparameter *skia-sheet* (open-skia-sheet :sdl2 t))
 
-  (open-skia-sheet :sdl2-ttf t)
+  (open-skia-sheet :sdl2-skia-ttf t)
   (let ((result (do-simple-draw *skia-sheet* :synchronize t)))
     (if (typep result 'condition)
         (error result)
@@ -203,5 +202,5 @@
   (sheet-direct-mirror *skia-sheet*)
   (close-skia-sheet *skia-sheet*)
   (nuke-state)
-  (destroy-port (find-port :server-path :sdl2-ttf))
+  (destroy-port (find-port :server-path :sdl2-skia-ttf))
 )

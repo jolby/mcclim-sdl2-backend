@@ -116,6 +116,16 @@
        (if (cffi:null-pointer-p ,wrapper)
            (error 'skia-error :string (or ,err-msg (format nil "~A can't be null pointer!" (quote ,form))))
            ,wrapper))))
+
+(defmacro check-nil-or-nullptr (form &optional err-msg)
+  (alx:with-gensyms (wrapper)
+    `(let ((,wrapper ,form))
+       (when (null ,wrapper)
+         (error 'skia-error :string (or ,err-msg (format nil "~A can't be nil!" (quote ,form)))))
+       (when (cffi:null-pointer-p ,wrapper)
+         (error 'skia-error :string (or ,err-msg (format nil "~A can't be null pointer!" (quote ,form)))))
+       ,wrapper)))
+
 ;;;
 ;;; Structured cleanups
 ;;;

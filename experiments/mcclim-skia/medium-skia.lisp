@@ -10,23 +10,23 @@
   (%medium-mirror medium))
 
 (defun %lookup-skia-canvas (medium)
-  (or (skia-canvas medium)
+  (or (medium-skia-canvas medium)
       (let* ((sheet (sheet-mirrored-ancestor (medium-sheet medium)))
              (mirror (sheet-mirror sheet))
              (skia-canvas (skia-core::canvas (skia-context mirror))))
         (if skia-canvas
             (progn
-              (setf (skia-canvas medium) skia-canvas)
+              (setf (medium-skia-canvas medium) skia-canvas)
               skia-canvas)
-            (error "Unable to lookup skia-canvas from medium: ~a" medium)))))
+            (error "Unable to lookup skia-canvas for medium: ~a" medium)))))
 
 (defun %ensure-medium-skia-paint (medium)
-  (if-let ((skia-paint (medium-skia-paint medium)))
+  (alx:if-let ((skia-paint (medium-skia-paint medium)))
     skia-paint
     (setf (medium-skia-paint medium) (skia-core::make-paint))))
 
 (defun %ensure-medium-skia-font-paint (medium)
-  (if-let ((skia-font-paint (medium-skia-font-paint medium)))
+  (alx:if-let ((skia-font-paint (medium-skia-font-paint medium)))
     skia-font-paint
     (setf (medium-skia-font-paint medium) (skia-core::make-paint))))
 
@@ -63,9 +63,8 @@
       (%update-skia-paint-from-ink medium ink))))
 
 (defun %update-skia-paint-from-line-style (medium line-style)
-  (let* ((skia-paint (%ensure-medium-skia-paint medium))
-         (line-style (medium-line-style medium)))
-    (skia-core::set-paint-width skia-paint
+  (let* ((skia-paint (%ensure-medium-skia-paint medium)))
+    (skia-core::set-paint-stroke-width skia-paint
                                 (round (line-style-effective-thickness line-style medium)))
     (skia-core::set-paint-stroke-cap skia-paint
                                      (%translate-cap-shape (line-style-cap-shape line-style)))
@@ -83,7 +82,7 @@
     (unless (and (eq new-unit old-unit)
                  (eql (line-style-thickness new-value)
                       (line-style-thickness old-line-style)))
-      (skia-core::set-paint-width skia-paint
+      (skia-core::set-paint-stroke-width skia-paint
             (round (line-style-effective-thickness new-value medium))))
     (unless (eq new-cap-shape (line-style-cap-shape old-line-style))
       (skia-core::set-paint-stroke-cap skia-paint
@@ -109,27 +108,28 @@
       typeface))
 
 (defun %swap-skia-font (medium new-font)
-  (if-let ((old-font (medium-skia-font medium)))
+  (alx:if-let ((old-font (medium-skia-font medium)))
            (skia-core::destroy-font old-font))
   (setf (medium-skia-font medium) new-font))
 
 (defun %update-skia-font-from-text-style (medium text-style)
-  (let ((skia-font (medium-skia-font medium))
-        (text-size (text-style-size text-style))
-        (font-path (%font-file-path-from-text-style text-style))
-        (font-paint (%ensure-medium-skia-font-paint medium)))
+  (let* ((skia-font (medium-skia-font medium))
+         (font-path (%font-file-path-from-text-style text-style))
+         (font-paint (%ensure-medium-skia-font-paint medium))
+         (text-size (text-style-size text-style))
+         (effective-font-size (climi::normalize-font-size text-size)))
     (unless font-path (error "Error finding font-path for text-style: ~a" text-style))
-    (let ((skia-typeface skia-typeface-exists-p) (gethash font-path (fontpath->skia-typeface (port medium))))
+    (multiple-value-bind (skia-typeface skia-typeface-exists-p) (gethash font-path (fontpath->skia-typeface (port medium)))
       (unless skia-typeface-exists-p
         (setf skia-typeface (%load-skia-typeface font-path))
         (unless skia-typeface (error "Error loading skia-typeface for font-path: ~a" font-path))
         (setf (gethash font-path (fontpath->skia-typeface (port medium))) skia-typeface))
       (if (and skia-font
                (skia-core::typeface-equal-p skia-typeface (skia-core::font-typeface skia-font)))
-          (unless (= text-size (skia-core::font-size skia-font))
-                (skia-core::set-font-size skia-font text-size))
+          (unless (= effective-font-size (skia-core::font-size skia-font))
+                (skia-core::set-font-size skia-font effective-font-size))
           (let ((new-font (skia-core::make-font skia-typeface)))
-            (skia-core::set-font-size new-font text-size)
+            (skia-core::set-font-size new-font effective-font-size)
             (skia-core::set-paint-style font-paint :stroke-and-fill-style)
             (skia-core::set-paint-anti-alias font-paint t)
             (%swap-skia-font medium new-font))))))
@@ -141,55 +141,53 @@
         (log:info "changing text-style-mapping to: ~a, from: ~a" text-style-mapping old-text-style)
         (%update-skia-font-from-text-style medium text-style)))))
 
+(defun skia-opengl-medium-info (medium stream)
+  (format stream
+          "~&~%Skia Foreign Objects: ~%
+          Skia Paint: ~a  ~%
+          Skia Font Paint: ~a~%
+          Skia Font: ~a"
+          (when (medium-skia-paint medium) (skia-core::paint-to-string (medium-skia-paint medium)))
+          (when (medium-skia-font-paint medium) (skia-core::paint-to-string (medium-skia-font-paint medium)))
+          (when (medium-skia-font medium) (skia-core::font-to-string (medium-skia-font medium)))))
+
+(defmethod describe-object :after ((medium skia-opengl-medium) stream)
+  (skia-opengl-medium-info medium stream))
+
 (defmethod initialize-instance :after ((medium skia-opengl-medium) &rest args)
   (declare (ignore args))
   (let ((ink (medium-ink medium))
         (line-style (medium-line-style medium))
-        (text-style (medium-text-style medium))))
-  (log:info "")
-  (%update-skia-paint-from-ink medium ink)
-  (%update-skia-paint-from-line-style medium line-style)
-  (%update-skia-font-from-text-style text-style))
+        (text-style (medium-text-style medium)))
+    (%update-skia-paint-from-ink medium ink)
+    (%update-skia-paint-from-line-style medium line-style)
+    (%update-skia-font-from-text-style medium text-style))
+  (log:info "DONE: skia-opengl-medium: ~a" medium))
 
-(defun %invoke-with-skia-drawing-state-synced-with-medium (medium continuation)
-  (declare (ignorable medium continuation))
-  (funcall continuation))
-;;
-;; Draw OPs playback
-;;
 (defmacro with-skia-canvas ((medium) &body body)
   (alx:once-only (medium)
-    (alx:with-gensyms (gskia-draw-op)
-      `(let ((canvas::*canvas* (%lookup-skia-canvas ,medium)))
-         (with-paint (medium)
-           (with-font (medium canvas::*default-typeface*)
-             ;; (log:info "XXX paint: ~a" canvas::*paint*)
-             ;; (log:info "XXX font: ~a" canvas::*font*)
-             (flet ((,gskia-draw-op ()
-                      ,@body))
-               (declare (dynamic-extent #',gskia-draw-op))
-               (%invoke-with-skia-drawing-state-synced-with-medium
-                ,medium #',gskia-draw-op)
-               )
-             ))
-         ))))
+    `(let ((canvas::*canvas* (%lookup-skia-canvas ,medium)))
+       (progn ,@body))))
 
 (defmethod medium-draw-line* ((medium skia-opengl-medium) x1 y1 x2 y2)
   (with-skia-canvas (medium)
-      (push-command medium #'canvas::line x1 y1 x2 y2)
-    ))
+    (canvas::line x1 y1 x2 y2
+                  :canvas (medium-skia-canvas medium)
+                  :paint (medium-skia-paint medium))))
 
 (defmethod medium-draw-polygon* ((medium skia-opengl-medium) coord-seq closed filled)
   (with-skia-canvas (medium)
-    (push-command medium #'canvas::polygon coord-seq :closed closed :filled filled)))
+    (canvas::polygon coord-seq :closed closed :filled filled
+                               :canvas (medium-skia-canvas medium)
+                               :paint (medium-skia-paint medium))))
 
 (defmethod medium-draw-rectangle* ((medium basic-medium) x1 y1 x2 y2 filled)
   (let ((width (abs (- x2 x1)))
         (height (abs (- y2 y1))))
     (with-skia-canvas (medium)
-      ;; (when filled (skia-core::set-paint-style canvas::*paint* :fill-style))
-      ;; (canvas::rectangle x1 y1 width height)
-      (push-command medium #'canvas::rectangle x1 y1 width height))))
+      (canvas::rectangle x1 y1 width height
+                         :canvas (medium-skia-canvas medium)
+                         :paint (medium-skia-paint medium)))))
 
 ;; (defmethod medium-draw-circle* ((medium basic-medium) cx cy radius eta1 eta2 filled)
 ;;   )
@@ -204,57 +202,28 @@
       (return-from medium-draw-text*))
     (let ((fixed-text (subseq text (or start 0) (or end (length text)))))
       (with-skia-canvas (medium)
-        (log:info "Drawing string ~s at (~s,~s)"
-                  fixed-text x y)
-
-        (skia-core::set-paint-style canvas::*paint* :stroke-and-fill-style)
-        ;; (canvas::simple-text fixed-text x y)
-        (push-command medium #'canvas::simple-text fixed-text x y)
-        ) )))
-
+        (log:info "Drawing string ~s at (~s,~s)" fixed-text x y)
+        (canvas::simple-text fixed-text x y :canvas (medium-skia-canvas medium)
+                                            :paint (medium-skia-font-paint medium)
+                                            :font (medium-skia-font medium))))))
 
 (defmethod medium-clear-area ((medium skia-opengl-medium) left top right bottom)
   (with-skia-canvas (medium)
-    ;; (push-command medium #'canvas::rectangle x1 y1 width height)
-    ;; (draw-rectangle* medium left top right bottom
-    ;;                  :ink (compose-over (medium-background medium) +black+))
     (log:info "clear-area... ")
-    (push-command medium #'canvas::clear-canvas)
-    ))
+    (draw-rectangle* medium left top right bottom
+                     :ink (compose-over (medium-background medium) +black+))))
 
 (defun %swap-window-buffers (medium)
   (alx:when-let ((mirror (medium-drawable medium)))
-    (sdl2::gl-swap-window (mcclim-sdl2::sdl2-window (mcclim-sdl2::window-id mirror)))
-    ))
-
-(defun %do-skia-output (medium)
-  ;; (break)
-  (unless (%medium-has-pending-draw-ops-p medium)
-    (return-from %do-skia-output))
-  (handler-case
-      (let ((canvas::*paint* nil)
-            (canvas::*font* nil))
-        (%push-paint medium)
-        (unwind-protect
-             (with-skia-canvas (medium)
-               (drain-draw-commands medium)
-               (canvas::flush-canvas)
-               (let* ((mirror (medium-drawable medium))
-                      (window (mcclim-sdl2::sdl2-window (mcclim-sdl2::window-id mirror))))
-                 (sdl2::gl-swap-window window)))
-          (%pop-paint medium)))
-    (error (c)
-      (log:error "~a" c))) )
-
-(mcclim-sdl2::define-sdl2-request do-medium-skia-output (medium)
-  (log:info "do-medium-skia-output on thread: ~a" (bt:current-thread))
-  (%do-skia-output medium))
+    (sdl2::gl-swap-window
+     (mcclim-sdl2::sdl2-window (mcclim-sdl2::window-id mirror)))))
 
 (defmethod medium-finish-output :before ((medium skia-opengl-medium))
   (alx:when-let ((mirror (medium-drawable medium)))
     (log:info "FINISH OUTPUT")
-    (when (%medium-has-pending-draw-ops-p medium)
-      (do-medium-skia-output medium))))
+    (with-skia-canvas (medium)
+      (canvas::flush-canvas (medium-skia-canvas medium))
+      (%swap-window-buffers medium))))
 
 (defmethod medium-force-output :before ((medium skia-opengl-medium))
   ;; (break)
@@ -269,7 +238,7 @@
   ;; in the command queue. This resulted in no actual drawing commands being
   ;; queued to opengl, and then when calling swap-windows it presented a black
   ;; screen.
-
   (alx:when-let ((mirror (medium-drawable medium)))
     (log:info "FORCE OUTPUT. gl-swap-window...")
-    (sdl2::gl-swap-window (mcclim-sdl2::sdl2-window (mcclim-sdl2::window-id mirror)))))
+    (sdl2::gl-swap-window
+     (mcclim-sdl2::sdl2-window (mcclim-sdl2::window-id mirror)))))

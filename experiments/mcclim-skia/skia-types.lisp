@@ -210,7 +210,7 @@
                    '%skia:sk-paint+join stroke-join))
 
 (defun paint-to-string (paint)
-  (format nil "SkPaint (~s) color: #~x, style: ~s anti-alias: ~a, ~%width: ~a, miter: ~a, cap: ~s, join: ~s"
+  (format nil "<SkPaint (~s) color: #~x, style: ~s anti-alias: ~a, ~%width: ~a, miter: ~a, cap: ~s, join: ~s>"
           paint (get-paint-color32argb paint) (get-paint-style paint) (paint-anti-alias-p paint)
           (get-paint-stroke-width paint) (get-paint-stroke-miter paint)
           (get-paint-stroke-cap paint) (get-paint-stroke-join paint)))
@@ -416,7 +416,8 @@
   (values))
 
 (defun typeface-equal-p (tf1 tf2)
-  (%skia::sk-typeface+equal tf1 tf2))
+  (%skia::sk-typeface+equal '(claw-utils:claw-pointer %skia::sk-typeface) tf1
+                            '(claw-utils:claw-pointer %skia::sk-typeface) tf2))
 
 (defun %typeface-family-name (typeface-ptr)
   (unless (cffi:null-pointer-p typeface-ptr)
@@ -465,3 +466,7 @@
   (%skia:set-size
    '(claw-utils:claw-pointer %skia:sk-font) font
    '%skia:sk-scalar (float size 0f0)) )
+
+(defun font-to-string (font)
+  (format nil "<Skia Font (~s) :family ~a  :size ~a>"
+          font (font-family-name font) (font-size font)))
