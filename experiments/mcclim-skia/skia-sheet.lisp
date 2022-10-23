@@ -87,22 +87,29 @@
     (with-bounding-rectangle* (x1 y1 x2 y2) sheet
       (log:info "bounding rect: x1: ~a, y1: ~a, x2: ~a, y2: ~a" x1 y1 x2 y2)
       (medium-clear-area medium x1 y1 x2 y2)
-      (draw-rectangle* medium
-                       (+ x1 10) (+ y1 10)
-                       (- x2 10) (- y2 10)
-                       :ink +deep-sky-blue+)
-      (draw-circle* medium 10 10 25 :ink (alexandria:random-elt (make-contrasting-inks 8)))
+      ;; (draw-rectangle* medium
+      ;;                  (+ x1 10) (+ y1 10)
+      ;;                  (- x2 10) (- y2 10)
+      ;;                  :ink +deep-sky-blue+)
+      (let ((rr-path (skia-core::path-round-rectangle
+                      (+ x1 10) (+ y1 10) 1060 700 5 5))
+            (shadow-paint (skia-core::make-paint :color #xffeeeeee
+                                                 :anti-alias t)))
+        (canvas::draw-shadowed-path rr-path shadow-paint 5
+                                    :canvas (medium-skia-canvas medium)))
+
+      (draw-circle* medium 30 30 25 :ink (alexandria:random-elt (make-contrasting-inks 8)))
       (draw-point* medium 100 100 :ink +black+ :line-thickness 8)
       (draw-text* medium "(100,100)" 100 100
                   :text-style (make-text-style :sans-serif :roman 32)
                   :ink +red+)
-      (draw-line* medium 10 10 500 500 :ink +red+ :line-thickness 4)
-      (draw-point* medium 10 10 :ink +green+ :line-thickness 8)
+      (draw-line* medium 30 30 500 500 :ink +red+ :line-thickness 4)
+      (draw-point* medium 30 30 :ink +green+ :line-thickness 8)
       (draw-point* medium 500 500 :ink +red+ :line-thickness 8)
       ;; Test opacity- will we see the red line undneath??
-      (draw-circle* medium 495 495 100 :ink (clim-internals::make-rgba-color 0.4 0.8 0.5 0.8))
+      (draw-circle* medium 495 495 100
+                    :ink (clim-internals::make-rgba-color 0.4 0.8 0.5 0.8))
 
-      ;;(sleep 1)
       (medium-finish-output sheet))))
 
 ;;XXX REMEMBER: all drawing calls must be submitted to the main SDL

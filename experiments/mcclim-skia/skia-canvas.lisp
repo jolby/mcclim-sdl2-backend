@@ -240,26 +240,26 @@
 (defun font-size (size &key (font *font*))
   (check-nil-or-nullptr font)
   (%skia:set-size
-   '(claw-utils:claw-pointer %skia:sk-font) *font*
+   '(claw-utils:claw-pointer %skia:sk-font) font
    '%skia:sk-scalar (float size 0f0)))
 
 (defun font-baseline-snap (snapped &key (font *font*))
   (check-nil-or-nullptr font)
     (%skia:set-baseline-snap
-     '(claw-utils:claw-pointer %skia:sk-font) *font*
+     '(claw-utils:claw-pointer %skia:sk-font) font
      :bool (and snapped t)))
 
 (defun font-edging (mode &key (font *font*))
   (check-nil-or-nullptr font)
   (when *font*
     (%skia:set-edging
-     '(claw-utils:claw-pointer %skia:sk-font) *font*
+     '(claw-utils:claw-pointer %skia:sk-font) font
      '%skia::sk-font+edging mode)))
 
 (defun font-subpixel (subpixeled &key (font *font*))
   (check-nil-or-nullptr font)
     (%skia:set-subpixel
-     '(claw-utils:claw-pointer %skia:sk-font) *font*
+     '(claw-utils:claw-pointer %skia:sk-font) font
      :bool (and subpixeled t)))
 
 ;;;
@@ -271,7 +271,8 @@
                              ;;if caller provides and doesn't clean up
                              (light-pos (skia-core::make-point3 0 -700 700) light-pos-p)
                              (light-radius 1.1)
-                             (ambient-alpha 0.5) (spot-alpha 0.35)
+                             (ambient-alpha 0.05)
+                             (spot-alpha 0.35)
                              (shadow-flags 4) ;;directional light
                              (canvas *canvas*))
   (check-nil-or-nullptr canvas)
@@ -293,7 +294,7 @@
                                                '%skia::sk-color ambient-color
                                                '%skia::sk-color spot-color
                                                '%skia::uint32-t shadow-flags)
-           (path path :paint paint))
+           (path path :paint paint :canvas canvas))
       (skia-core::destroy-point3 z-plane3)
       (unless light-pos-p (skia-core::destroy-point3 light-pos3)))))
 

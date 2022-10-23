@@ -215,11 +215,15 @@
           (get-paint-stroke-width paint) (get-paint-stroke-miter paint)
           (get-paint-stroke-cap paint) (get-paint-stroke-join paint)))
 
-(defun make-paint (&key (color #xFF000000) (stroke-width 1) (style :fill-style))
+(defun make-paint (&key (color #xFF000000)
+                     (stroke-width 1)
+                     (style :fill-style)
+                     (anti-alias nil))
   (let ((paint (iffi:make-intricate-instance '%skia:sk-paint)))
     (set-paint-color32argb paint color)
     (set-paint-stroke-width paint stroke-width)
     (set-paint-style paint style)
+    (set-paint-anti-alias paint anti-alias)
     paint))
 
 ;;
@@ -233,11 +237,13 @@
        (py %skia:f-y))
       point
     (setf px (float x 0f0)
-          py (float y 0f0))))
+          py (float y 0f0))
+    point))
 
 (defun make-point (x y)
   (let ((p (iffi:make-intricate-instance '%skia:sk-point)))
-    (set-point-xy p x y)))
+    (set-point-xy p x y)
+    p))
 
 (defun destroy-point (p)
   (iffi:destroy-intricate-instance '%skia:sk-point p))
@@ -251,11 +257,13 @@
       point3
     (setf px (float x 0f0)
           py (float y 0f0)
-          pz (float z 0f0))))
+          pz (float z 0f0))
+    point3))
 
 (defun make-point3 (x y z)
   (let ((p (iffi:make-intricate-instance '%skia:sk-point3)))
-    (set-point3-xyz p x y z)))
+    (set-point3-xyz p x y z)
+    p))
 
 (defun destroy-point3 (p)
   (iffi:destroy-intricate-instance '%skia:sk-point3 p))
@@ -377,9 +385,33 @@
                  '%skia:sk-scalar (float x1 0f0)
                  '%skia:sk-scalar (float y1 0f0)))
 
+(defun path-rectangle (x y w h &key (path-direction :cw) (append-to nil))
+  (%skia:add-rect
+   '(:pointer %skia:sk-path) (or append-to (make-path))
+   '%skia:sk-scalar (float x 0f0)
+   '%skia:sk-scalar (float y 0f0)
+   '%skia:sk-scalar (float w 0f0)
+   '%skia:sk-scalar (float h 0f0)
+   '%skia:sk-path-direction path-direction))
+
+(defun %path-round-rectangle (rect rad-x rad-y
+                              &key (path-direction :cw) (append-to nil))
+  (%skia:add-round-rect
+     '(:pointer %skia:sk-path) (or append-to (make-path))
+     '(:pointer %skia:sk-rect) rect
+     '%skia:sk-scalar (float rad-x 0f0)
+     '%skia:sk-scalar (float rad-y 0f0)
+     '%skia:sk-path-direction path-direction))
+
+(defun path-round-rectangle (x y w h rad-x rad-y
+                             &key (path-direction :cw) (append-to nil))
+  (with-rectangle (rect x y w h)
+    (%path-round-rectangle rect rad-x rad-y
+                           :path-direction path-direction :append-to append-to)))
+
 (defun path-circle (center-x center-y radius
                     &key (path-direction :cw) (append-to nil))
-  (%skia:sk-path+circle
+  (%skia:add-circle
    '(:pointer %skia:sk-path) (or append-to (make-path))
    '%skia:sk-scalar (float center-x 0f0)
    '%skia:sk-scalar (float center-y 0f0)
