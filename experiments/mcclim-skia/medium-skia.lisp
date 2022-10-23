@@ -28,7 +28,7 @@
 (defun %ensure-medium-skia-font-paint (medium)
   (alx:if-let ((skia-font-paint (medium-skia-font-paint medium)))
     skia-font-paint
-    (setf (medium-skia-font-paint medium) (skia-core::make-paint))))
+    (setf (medium-skia-font-paint medium) (skia-core::make-paint :anti-alias t))))
 
 ;;; secondary methods for changing text styles and line styles and syncing with
 ;;; corresponding skia paint/font styles

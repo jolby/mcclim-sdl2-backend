@@ -87,30 +87,45 @@
     (with-bounding-rectangle* (x1 y1 x2 y2) sheet
       (log:info "bounding rect: x1: ~a, y1: ~a, x2: ~a, y2: ~a" x1 y1 x2 y2)
       (medium-clear-area medium x1 y1 x2 y2)
-      ;; (draw-rectangle* medium
-      ;;                  (+ x1 10) (+ y1 10)
-      ;;                  (- x2 10) (- y2 10)
-      ;;                  :ink +deep-sky-blue+)
-      (let ((rr-path (skia-core::path-round-rectangle
+      ;; Draw a Material-ish 'Card' inset from the window
+      ;; frame by 10px
+      (let ((outer-card-path (skia-core::path-round-rectangle
                       (+ x1 10) (+ y1 10) 1060 700 5 5))
+            (inner-card-path (skia-core::path-round-rectangle
+                              (+ x1 650) (+ y1 10) 400 650 5 5))
             (shadow-paint (skia-core::make-paint :color #xffeeeeee
                                                  :anti-alias t)))
-        (canvas::draw-shadowed-path rr-path shadow-paint 5
-                                    :canvas (medium-skia-canvas medium)))
+        (unwind-protect
+             (progn
+               (canvas::draw-shadowed-path outer-card-path shadow-paint 5
+                                           :canvas (medium-skia-canvas medium))
 
-      (draw-circle* medium 30 30 25 :ink (alexandria:random-elt (make-contrasting-inks 8)))
-      (draw-point* medium 100 100 :ink +black+ :line-thickness 8)
-      (draw-text* medium "(100,100)" 100 100
-                  :text-style (make-text-style :sans-serif :roman 32)
-                  :ink +red+)
-      (draw-line* medium 30 30 500 500 :ink +red+ :line-thickness 4)
-      (draw-point* medium 30 30 :ink +green+ :line-thickness 8)
-      (draw-point* medium 500 500 :ink +red+ :line-thickness 8)
-      ;; Test opacity- will we see the red line undneath??
-      (draw-circle* medium 495 495 100
-                    :ink (clim-internals::make-rgba-color 0.4 0.8 0.5 0.8))
+               (draw-circle* medium 50 50 25
+                             :ink (alexandria:random-elt
+                                   (make-contrasting-inks 8)))
+               (draw-point* medium 100 100 :ink +black+ :line-thickness 8)
+               (draw-text* medium "(100,100)" 100 100
+                           :text-style (make-text-style :sans-serif :roman 32)
+                           :ink +red+)
+               (draw-line* medium 50 50 500 500 :ink +red+ :line-thickness 4)
+               (draw-point* medium 50 50 :ink +green+ :line-thickness 8)
+               (draw-point* medium 500 500 :ink +red+ :line-thickness 8)
+               ;; Test opacity- will we see the red line undneath??
+               (draw-circle* medium 500 500 100
+                             :ink (clim-internals::make-rgba-color
+                                   0.4 0.8 0.5 0.8))
 
-      (medium-finish-output sheet))))
+               ;; Make inner card at higher elevation from inner
+               (canvas::draw-shadowed-path inner-card-path shadow-paint 10
+                                           :canvas (medium-skia-canvas medium))
+
+               ;; Make a text header for inner card
+               (draw-text* medium "Card Header" 700 60
+                           :text-style (make-text-style :sans-serif :roman 48))
+               (medium-finish-output sheet))
+
+        (skia-core::destroy-paint shadow-paint)
+        (skia-core::destroy-path outer-card-path))))))
 
 ;;XXX REMEMBER: all drawing calls must be submitted to the main SDL
 ;;rendering thread. If not, you'll just get a black window.
