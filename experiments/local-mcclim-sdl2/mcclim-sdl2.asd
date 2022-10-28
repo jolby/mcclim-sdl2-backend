@@ -7,6 +7,7 @@
   :serial t
   :components ((:file "packages")
                (:file "utilities")
+               (:file "input")
                (:file "port")
                (:file "mirror")
                (:file "medium-soft-render")))

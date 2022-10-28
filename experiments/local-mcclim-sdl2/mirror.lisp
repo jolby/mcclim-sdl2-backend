@@ -199,8 +199,101 @@
     (sdl2-ffi.functions:sdl-get-window-surface window)
     (sdl2-ffi.functions:sdl-update-window-surface window)
 
-    ;; (list )
     (make-instance 'window-repaint-event
                          :timestamp stamp
                          :sheet sheet
                          :region clim:+everywhere+) ))
+
+;;XXX TODO Do real input state management
+(defvar *key-modifiers* nil)
+
+;;XXX DEBUG
+(defvar *last-keydown-event* nil)
+
+;;; Keyboard SDL2 event handlers
+(define-sdl2-handler (ev :keydown) (window-id timestamp state repeat keysym)
+  (alx:when-let* ((mirror (id->mirror *sdl2-port* window-id))
+                  (sheet (mirror-sheet mirror)))
+    (let* ((scancode (sdl2:scancode keysym))
+           (scancode-name (sdl2:scancode-name scancode))
+           (scancode-value (sdl2:scancode-value keysym))
+           (scancode-symbol (sdl2:scancode-symbol scancode))
+           (scancode-key (sdl2:get-key-from-scancode scancode))
+           (scancode-key-name (sdl2:scancode-key-name scancode))
+           (mod-value (sdl2:mod-value keysym))
+           (sym-value (sdl2:sym-value keysym))
+           (mod-keywords (sdl2:mod-keywords mod-value)))
+      ;; (log:info "EVT keydown: ev: ~a, wid: ~a ts: ~a, state: ~a, repeat: ~a, keysym: ~a"
+      ;;           ev window-id timestamp state repeat keysym)
+;;       (log:info "scancode: ~a, scancode-name: ~a, scancode-value: ~a, scancode-symbol: ~a, scancode-key: ~a, scancode-key-name: ~a,
+;; mod-value: ~a, sym-value: ~a, mod-keywords: ~a"
+;;        scancode scancode-name scancode-value scancode-symbol scancode-key scancode-key-name mod-value sym-value mod-keywords)
+      (multiple-value-bind (keyname alpha-p modifier-state keysym-name)
+          (sdl2-event-to-key-name-and-modifiers sym-value mod-value)
+        (log:info "keyname: ~a, alpha-p ~a modifier-state: ~a, keysym-name: ~a" keyname alpha-p modifier-state keysym-name)
+        (setf *key-modifiers* modifier-state)
+        (let ((kp-event (make-instance 'key-press-event
+                                       :key-name keyname
+                                       :key-character (and (characterp keyname) keyname)
+                                       :x 0 :y 0
+                                       :graft-x 0
+                                       :graft-y 0
+                                       :sheet sheet
+                                       :modifier-state modifier-state
+                                       :timestamp timestamp)))
+          (log:info "KP EVT: ~a" kp-event)
+          (setf *last-keydown-event* kp-event)
+          kp-event)) )))
+
+(define-sdl2-handler (ev :keyup) (window-id timestamp state repeat keysym)
+  (alx:when-let* ((mirror (id->mirror *sdl2-port* window-id))
+                  (sheet (mirror-sheet mirror)))
+    ;; (log:info "EVT keyup: ev: ~a, wid: ~a ts: ~a, state: ~a, repeat: ~a, keysym: ~a"
+    ;;           ev window-id timestamp state repeat keysym)
+    ))
+
+;;;;Mouse SDL2 event handlers
+(define-sdl2-handler (ev :mousebuttondown) (window-id timestamp x y button which state)
+  (alx:when-let* ((mirror (id->mirror *sdl2-port* window-id))
+                  (sheet (mirror-sheet mirror)))
+    (log:info "EVT mousebuttondown: ev: ~a, wid: ~a ts: ~a, x: ~a, y: ~a, btn: ~a, which: ~a state: ~a"
+              ev window-id timestamp x y button which state)
+    ))
+
+(define-sdl2-handler (ev :mousebuttonup) (window-id timestamp x y button which state)
+  (alx:when-let* ((mirror (id->mirror *sdl2-port* window-id))
+                  (sheet (mirror-sheet mirror)))
+    (log:info "EVT mousebuttonup: ev: ~a, wid: ~a ts: ~a, x: ~a, y: ~a, btn: ~a, which: ~a state: ~a"
+              ev window-id timestamp x y button which state)
+    ))
+
+(define-sdl2-handler (ev :mousemotion) (window-id timestamp x y xrel yrel which state)
+  (alx:when-let* ((mirror (id->mirror *sdl2-port* window-id))
+                  (sheet (mirror-sheet mirror)))
+    ;; Uncomment to test, but it SPEWS!!
+    ;; (log:info "EVT mousemotion: ev: ~a, wid: ~a ts: ~a, x: ~a, y: ~a, xrel: ~a, yrel: ~a, which: ~a state: ~a"
+    ;;           ev window-id timestamp x y xrel yrel which state)
+    ))
+
+;; This also picks up touchpad
+(define-sdl2-handler (ev :mousewheel) (window-id timestamp x y which direction)
+  (alx:when-let* ((mirror (id->mirror *sdl2-port* window-id))
+                  (sheet (mirror-sheet mirror)))
+    ;; Uncomment to test, but it SPEWS!!
+    ;; (log:info "EVT mousewheel: ev: ~a, wid: ~a ts: ~a, x: ~a, y: ~a, which: ~a direction: ~a"
+    ;;           ev window-id timestamp x y which direction)
+    ))
+
+;;XXX doesn't seem to work
+(define-sdl2-handler (ev :touchfinger) (window-id timestamp x y which direction)
+  (alx:when-let* ((mirror (id->mirror *sdl2-port* window-id))
+                  (sheet (mirror-sheet mirror)))
+    ;; Uncomment to test, but it SPEWS!!
+    ;; (log:info "EVT touchfinger: ev: ~a, wid: ~a ts: ~a, x: ~a, y: ~a, which: ~a direction: ~a"
+    ;;           ev window-id timestamp x y which direction)
+    ))
+;;XXX doesn't seem to work
+(define-sdl2-handler (ev :multigesture) (touch-id timestamp x y d-theta d-dist num-fingers)
+  ;; (log:info "EVT multigesture: touch-id: ~a, ts: ~a, x: ~a, y: ~a, d-theta: ~a, d-dist: ~a, num-fingers: ~a"
+  ;;           touch-id timestamp x y d-theta d-dist num-fingers)
+  )

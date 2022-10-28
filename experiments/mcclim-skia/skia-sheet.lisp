@@ -85,10 +85,11 @@
 (defun simple-draw (sheet)
   (let ((medium (sheet-medium sheet)))
     (with-bounding-rectangle* (x1 y1 x2 y2) sheet
+      (log:info "SIMPLE-DRAW current-thread: ~a" (bt:current-thread))
       (log:info "bounding rect: x1: ~a, y1: ~a, x2: ~a, y2: ~a" x1 y1 x2 y2)
       (medium-clear-area medium x1 y1 x2 y2)
       ;; Draw a Material-ish 'Card' inset from the window
-      ;; frame by 10px
+      ;; region by 10px
       (let ((outer-card-path (skia-core::path-round-rectangle
                       (+ x1 10) (+ y1 10) 1060 700 5 5))
             (inner-card-path (skia-core::path-round-rectangle
@@ -115,7 +116,7 @@
                              :ink (clim-internals::make-rgba-color
                                    0.4 0.8 0.5 0.8))
 
-               ;; Make inner card at higher elevation from inner
+               ;; Make inner card at higher elevation from outer
                (canvas::draw-shadowed-path inner-card-path shadow-paint 10
                                            :canvas (medium-skia-canvas medium))
 
