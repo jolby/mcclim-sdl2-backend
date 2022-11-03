@@ -149,7 +149,7 @@
   (let* ((key-info-plist (gethash sdl2-scancode-code scancode->key-info))
          (clim-mod-state (sdl2-mod-state->clim-mod-state sdl2-mod-state)))
     (unless key-info-plist (log:warn "Unknown scancode: ~a" sdl2-scancode-code))
-    (log:info "key-info: ~a" key-info-plist)
+    ;; (log:info "key-info: ~a" key-info-plist)
     (if (clim-mod-shift-p clim-mod-state)
         (values (getf key-info-plist :shifted-key-char)
                 (getf key-info-plist :shifted-key-code-keyword)

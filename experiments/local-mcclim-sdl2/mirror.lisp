@@ -225,13 +225,14 @@
      "scancode: ~a, scancode-name: ~a, scancode-value: ~a, scancode-symbol: ~a, scancode-key: ~a, scancode-key-name: ~a,mod-value: ~a, sym-value: ~a, mod-keywords: ~a"
      scancode scancode-name scancode-value scancode-symbol scancode-key scancode-key-name mod-value sym-value mod-keywords)))
 
-(defun %make-key-press-event (event-type-sym sdl2-scancode sdl2-mod-code sheet timestamp)
+(defun %make-key-event (event-type-sym sdl2-scancode sdl2-mod-code sheet timestamp)
   (multiple-value-bind (key-char key-code-keyword clim-mod-state)
       (key-press-event-values-from-sdl2-scancode sdl2-scancode sdl2-mod-code)
     ;; (log:info "sdl2-scancode: ~a, sdl2-mod-code: ~a, key-char: ~a, key-code-keyword: ~a, clim-mod-state: ~a"
     ;;           sdl2-scancode sdl2-mod-code key-char key-code-keyword clim-mod-state)
-    (log:info "KP EVT values: key-char: ~a, key-code-keyword: ~a, clim-mod-state: ~a"
-              key-char key-code-keyword clim-mod-state)
+    (when (eql event-type-sym 'clim:key-press-event)
+      (log:info "KP EVT values: key-char: ~a, key-code-keyword: ~a, clim-mod-state: ~a"
+                key-char key-code-keyword clim-mod-state))
     (let ((kp-event (make-instance event-type-sym
                                    :key-name key-code-keyword
                                    :key-character key-char
@@ -241,7 +242,8 @@
                                    :sheet sheet
                                    :modifier-state clim-mod-state
                                    :timestamp timestamp)))
-      (log:info "KP EVT: ~a" kp-event)
+      (when (eql event-type-sym 'clim:key-press-event)
+        (log:info "KP EVT: ~a" kp-event))
       kp-event)))
 
 (define-sdl2-handler (ev :keydown) (window-id timestamp state repeat keysym)
@@ -252,7 +254,7 @@
            (sdl2-mod-code (sdl2:mod-value keysym))
            (sdl2-key-code (sdl2:sym-value keysym)))
       ;; (dump-sdl2-keysym keysym)
-      (%make-key-press-event 'key-press-event scancode-value sdl2-mod-code sheet timestamp))))
+      (%make-key-event 'key-press-event scancode-value sdl2-mod-code sheet timestamp))))
 
 (define-sdl2-handler (ev :keyup) (window-id timestamp state repeat keysym)
   (alx:when-let* ((mirror (id->mirror *sdl2-port* window-id))
@@ -262,7 +264,7 @@
            (sdl2-mod-code (sdl2:mod-value keysym))
            (sdl2-key-code (sdl2:sym-value keysym)))
       ;; (dump-sdl2-keysym keysym)
-      (%make-key-press-event 'key-release-event scancode-value sdl2-mod-code sheet timestamp))
+      (%make-key-event 'key-release-event scancode-value sdl2-mod-code sheet timestamp))
     ;; (log:info "EVT keyup: ev: ~a, wid: ~a ts: ~a, state: ~a, repeat: ~a, keysym: ~a"
     ;;           ev window-id timestamp state repeat keysym)
     ))

@@ -82,6 +82,8 @@
                      ;; :buffering-p t
    ))
 
+(defparameter *last-char-txt* "")
+
 (defun simple-draw (sheet)
   (let ((medium (sheet-medium sheet)))
     (with-bounding-rectangle* (x1 y1 x2 y2) sheet
@@ -123,6 +125,8 @@
                ;; Make a text header for inner card
                (draw-text* medium "Card Header" 700 60
                            :text-style (make-text-style :sans-serif :roman 48))
+               (draw-text* medium (format nil "Last key: ~a" *last-char-txt*) 750 120
+                           :text-style (make-text-style :sans-serif :roman 32))
                (medium-finish-output sheet))
 
         (skia-core::destroy-paint shadow-paint)
@@ -162,6 +166,11 @@
 
 (defmethod handle-event ((sheet skia-app-sheet) (event window-repaint-event))
   (handle-repaint sheet (window-event-region event)))
+
+(defmethod handle-event ((sheet skia-app-sheet) (event clim:key-press-event))
+  (log:info "GOT EVENT: ~a" event)
+  (setf *last-char-txt* (string (keyboard-event-character event)))
+  (handle-repaint sheet +everywhere+))
 
 (defmethod handle-repaint ((sheet skia-app-sheet) region)
   (log:warn "Repainting a window (region ~s)." region)
