@@ -316,9 +316,6 @@
         ;; update position in pointer object
         (setf (slot-value pointer 'x) x
               (slot-value pointer 'y) y)
-        ;;XXX HACK! But I get error in distribute-event if pointer-sheet is null
-        (unless (pointer-sheet pointer)
-          (setf (pointer-sheet pointer) sheet))
         (make-instance event-type
                        :timestamp timestamp
                        :sheet sheet
