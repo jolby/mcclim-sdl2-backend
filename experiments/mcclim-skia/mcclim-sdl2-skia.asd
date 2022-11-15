@@ -1,6 +1,6 @@
 (in-package #:asdf-user)
 
-(defsystem "mcclim-sdl2-skia"
+(defsystem #:mcclim-sdl2-skia
   :author "Daniel Kochmański (McCLIM, SDL backend). Pavel Korlev (claw, skia bindings). Joel Boehland (mcclim-skia hacks)."
   :description "SDL2 backend"
   :depends-on ("mcclim" "mcclim-fonts" "mcclim-fonts/truetype"
@@ -20,9 +20,16 @@
                (:file "mcclim-skia-state")
                (:file "medium-skia")
                (:file "skia-sheet")
+               (:file "clx-sheet")
                ))
 
-(asdf:defsystem #:mcclim-sdl2-skia/blob
+(defsystem #:mcclim-sdl2-skia/tests
+  :depends-on ("mcclim" "mcclim-sdl2-skia" "fiveam")
+  :components ((:module "tests"
+                        :serial t
+                        :components ((:file "package")))))
+
+(defsystem #:mcclim-sdl2-skia/blob
   :description "skia runtime blob for linux"
   :author "Pavel Korlev (claw, skia bindings). Joel Boehland (mcclim/skia hacks)"
   :mailto "jboehland@gmail.com"

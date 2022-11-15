@@ -154,7 +154,8 @@
                   (climi::window-configuration-event-height event))
     (repaint-sheet sheet +everywhere+)))
 
-(defmethod handle-event ((sheet skia-app-sheet) (event window-manager-delete-event))
+(defmethod handle-event ((sheet skia-app-sheet)
+                         (event window-manager-delete-event))
   (log:info "DELETE. sheet: ~a. (sheet-direct-mirror sheet) ==> ~a"
             sheet (sheet-direct-mirror sheet))
   (log:info "DELETE. current-thread: ~a" (bt:current-thread))
@@ -171,6 +172,12 @@
   (log:info "GOT EVENT: ~a" event)
   (setf *last-char-txt* (string (keyboard-event-character event)))
   (handle-repaint sheet +everywhere+))
+
+(defmethod handle-event ((sheet skia-app-sheet)
+                         (event window-manager-focus-event))
+  (log:info "GOT EVENT: ~a" event)
+  (setf (port-keyboard-input-focus (port sheet)) sheet)
+  (setf (climi::port-focused-sheet (port sheet)) sheet))
 
 (defmethod handle-repaint ((sheet skia-app-sheet) region)
   (log:warn "Repainting a window (region ~s)." region)
@@ -234,5 +241,5 @@
   (sheet-direct-mirror *skia-sheet*)
   (close-skia-sheet *skia-sheet*)
   (nuke-state)
-  (destroy-port (find-port :server-path :sdl2-skia-ttf))
+  (destroy-port (find-port :server-path :sdl2-ttf-skia))
 )

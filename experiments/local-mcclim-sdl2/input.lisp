@@ -1,5 +1,13 @@
 (in-package #:mcclim-sdl2)
 
+(defparameter sdl2-button-mappings
+  `((,sdl2-ffi::+sdl-button-left+ .   ,clim:+pointer-left-button+)
+    (,sdl2-ffi::+sdl-button-middle+ . ,clim:+pointer-middle-button+)
+    (,sdl2-ffi::+sdl-button-right+ .  ,clim:+pointer-right-button+)
+    ;; (,sdl2-ffi::+sdl-button-x1 . clim:+pointer-x1-button+)
+    ;; (,sdl2-ffi::+sdl-button-x2 . clim:+pointer-x2-button+)
+     ))
+
 (defparameter sdl2-mod-mappings
   `((,sdl2-ffi::+kmod-lalt+ . :ALT-LEFT)
     (,sdl2-ffi::+kmod-lctrl+ . :CONTROL-LEFT)
@@ -144,6 +152,9 @@
       (when (> (logand sdl2-mod-state (car mod)) 0)
         (pushnew (cdr mod) mods)))
     mods))
+
+(defun sdl2-button-code->clim-button-code (sdl-button-code)
+  (cdr (assoc sdl-button-code sdl2-button-mappings)))
 
 (defun key-press-event-values-from-sdl2-scancode (sdl2-scancode-code sdl2-mod-state)
   (let* ((key-info-plist (gethash sdl2-scancode-code scancode->key-info))

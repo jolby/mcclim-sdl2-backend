@@ -29,4 +29,9 @@
                     (#:tch #:lparallel.queue)
                     (#:canvas #:skia-canvas)))
 
+;;Control package to compare sdl2/skia output to default clx
+(defpackage #:mcclim-clx-test
+  (:use #:clim-lisp #:clim #:clime #:climb :clim-clx)
+  (:local-nicknames (#:alx #:alexandria)))
+
 (in-package #:mcclim-skia)

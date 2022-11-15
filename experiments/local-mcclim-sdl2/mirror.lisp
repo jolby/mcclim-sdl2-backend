@@ -204,6 +204,39 @@
                          :sheet sheet
                          :region clim:+everywhere+) ))
 
+(defun %make-window-boundary-event (event-type sheet stamp)
+  (let ((window (sdl2-window (window-id (sheet-mirror sheet))))
+        (pointer (port-pointer *sdl2-port*)))
+    (cffi:with-foreign-objects ((xref :int)
+                                (yref :int))
+      (sdl2-ffi.functions:sdl-get-mouse-state xref yref)
+      (multiple-value-bind (window-x window-y) (sdl2:get-window-position window)
+        (let* ((x (cffi:mem-ref xref :int))
+               (y (cffi:mem-ref yref :int))
+               (graft-x (+ window-x x))
+               (graft-y (+ window-y y)))
+          (make-instance event-type
+                         :sheet sheet :timestamp stamp
+                         :pointer pointer
+                         :button nil
+                         :x x :y y
+                         :graft-x graft-x :graft-y graft-y
+                         :modifier-state nil
+                         ))
+        ))))
+
+(defmethod handle-sdl2-window-event ((key (eql :focus-gained)) sheet stamp d1 d2)
+  (log:info "Window focus gained ~a ~s ~s" sheet d1 d2)
+  (make-instance 'window-manager-focus-event :sheet sheet :timestamp stamp))
+
+(defmethod handle-sdl2-window-event ((key (eql :enter)) sheet stamp d1 d2)
+  (log:info "Window entered ~a ~s ~s" sheet d1 d2)
+  (%make-window-boundary-event 'pointer-enter-event sheet stamp))
+
+(defmethod handle-sdl2-window-event ((key (eql :leave)) sheet stamp d1 d2)
+  (log:info "Window leave ~a ~s ~s" sheet d1 d2)
+  (%make-window-boundary-event 'pointer-exit-event sheet stamp))
+
 ;;XXX TODO Do real input state management
 (defvar *key-modifiers* nil)
 
@@ -270,36 +303,93 @@
     ))
 
 ;;;;Mouse SDL2 event handlers
+(defun %make-mouse-button-event (event-type window-id timestamp x y button which state)
+  (let* ((mirror (id->mirror *sdl2-port* window-id))
+        (sheet (mirror-sheet mirror))
+        (sdl2-win (sdl2-ffi.functions:sdl-get-window-from-id window-id))
+        (pointer (port-pointer *sdl2-port*))
+        (clim-button (sdl2-button-code->clim-button-code button))
+        (clim-mod-state (sdl2-mod-state->clim-mod-state state)))
+    (multiple-value-bind (window-x window-y) (sdl2:get-window-position sdl2-win)
+      (let ((graft-x (+ window-x x))
+            (graft-y (+ window-y y)))
+        ;; update position in pointer object
+        (setf (slot-value pointer 'x) x
+              (slot-value pointer 'y) y)
+        ;;XXX HACK! But I get error in distribute-event if pointer-sheet is null
+        (unless (pointer-sheet pointer)
+          (setf (pointer-sheet pointer) sheet))
+        (make-instance event-type
+                       :timestamp timestamp
+                       :sheet sheet
+                       :pointer pointer :button clim-button
+                       :x x :y y :graft-x graft-x :graft-y graft-y
+                       :modifier-state clim-mod-state)))))
+
 (define-sdl2-handler (ev :mousebuttondown) (window-id timestamp x y button which state)
-  (alx:when-let* ((mirror (id->mirror *sdl2-port* window-id))
-                  (sheet (mirror-sheet mirror)))
-    (log:info "EVT mousebuttondown: ev: ~a, wid: ~a ts: ~a, x: ~a, y: ~a, btn: ~a, which: ~a state: ~a"
+  (log:info "EVT mousebuttondown: ev: ~a, wid: ~a ts: ~a, x: ~a, y: ~a, btn: ~a, which: ~a state: ~a"
               ev window-id timestamp x y button which state)
-    ))
+    (%make-mouse-button-event 'pointer-button-press-event window-id timestamp x y button which state))
 
 (define-sdl2-handler (ev :mousebuttonup) (window-id timestamp x y button which state)
-  (alx:when-let* ((mirror (id->mirror *sdl2-port* window-id))
-                  (sheet (mirror-sheet mirror)))
-    (log:info "EVT mousebuttonup: ev: ~a, wid: ~a ts: ~a, x: ~a, y: ~a, btn: ~a, which: ~a state: ~a"
+  (log:info "EVT mousebuttonup: ev: ~a, wid: ~a ts: ~a, x: ~a, y: ~a, btn: ~a, which: ~a state: ~a"
               ev window-id timestamp x y button which state)
-    ))
+    (%make-mouse-button-event 'pointer-button-release-event window-id timestamp x y button which state))
 
 (define-sdl2-handler (ev :mousemotion) (window-id timestamp x y xrel yrel which state)
   (alx:when-let* ((mirror (id->mirror *sdl2-port* window-id))
-                  (sheet (mirror-sheet mirror)))
-    ;; Uncomment to test, but it SPEWS!!
+                  (sheet (mirror-sheet mirror))
+                  (sdl2-win (sdl2-ffi.functions:sdl-get-window-from-id window-id))
+                  (pointer (port-pointer *sdl2-port*))
+                  (clim-mod-state (sdl2-mod-state->clim-mod-state state)))
     ;; (log:info "EVT mousemotion: ev: ~a, wid: ~a ts: ~a, x: ~a, y: ~a, xrel: ~a, yrel: ~a, which: ~a state: ~a"
     ;;           ev window-id timestamp x y xrel yrel which state)
-    ))
+    (multiple-value-bind (window-x window-y) (sdl2:get-window-position sdl2-win)
+         (let ((graft-x (+ window-x x))
+               (graft-y (+ window-y y)))
+           ;; update position in pointer object
+           (setf (slot-value pointer 'x) x
+                 (slot-value pointer 'y) y)
+           (make-instance 'pointer-motion-event
+                          :timestamp timestamp
+                          :sheet sheet
+                          :pointer pointer
+                          :button nil
+                          :x x :y y
+                          :graft-x graft-x :graft-y graft-y
+                          :modifier-state clim-mod-state)))))
 
 ;; This also picks up touchpad
 (define-sdl2-handler (ev :mousewheel) (window-id timestamp x y which direction)
   (alx:when-let* ((mirror (id->mirror *sdl2-port* window-id))
-                  (sheet (mirror-sheet mirror)))
-    ;; Uncomment to test, but it SPEWS!!
-    ;; (log:info "EVT mousewheel: ev: ~a, wid: ~a ts: ~a, x: ~a, y: ~a, which: ~a direction: ~a"
-    ;;           ev window-id timestamp x y which direction)
-    ))
+                  (sheet (mirror-sheet mirror))
+                  (sdl2-win (sdl2-ffi.functions:sdl-get-window-from-id window-id))
+                  (pointer (port-pointer *sdl2-port*)))
+    (multiple-value-bind (window-x window-y) (sdl2:get-window-position sdl2-win)
+         (let* ((graft-x (+ window-x x))
+               (graft-y (+ window-y y))
+               (old-x (or (slot-value pointer 'x) 0))
+               (old-y (or (slot-value pointer 'y) 0))
+               (delta-x (- x old-x))
+               (delta-y (- y old-y)))
+           ;; update position in pointer object
+           (setf (slot-value pointer 'x) x
+                 (slot-value pointer 'y) y)
+           ;;XXX HACK! But I get error in distribute-event if pointer-sheet is null
+           (unless (pointer-sheet pointer)
+             (setf (pointer-sheet pointer) sheet))
+           (log:info "EVT mousewheel/scroll: ts: ~a, x: ~a, y: ~a, dx: ~a, dy: ~a, which: ~a direction: ~a"
+                     timestamp x y delta-x delta-y which direction)
+
+           (make-instance 'climi::pointer-scroll-event
+                          :timestamp timestamp
+                          :sheet sheet
+                          :pointer pointer
+                          :button nil
+                          :x x :y y
+                          :graft-x graft-x :graft-y graft-y
+                          :delta-x delta-x :delta-y delta-y)))))
+
 
 ;;XXX doesn't seem to work
 (define-sdl2-handler (ev :touchfinger) (window-id timestamp x y which direction)
