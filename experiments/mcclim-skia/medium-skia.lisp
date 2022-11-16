@@ -138,7 +138,7 @@
   (let ((old-text-style (medium-text-style medium)))
     (unless (eq text-style old-text-style)
       (let ((text-style-mapping (text-style-mapping (port medium) text-style)))
-        (log:info "changing text-style-mapping to: ~a, from: ~a" text-style-mapping old-text-style)
+        ;; (log:info "changing text-style-mapping to: ~a, from: ~a" text-style-mapping old-text-style)
         (%update-skia-font-from-text-style medium text-style)))))
 
 (defun skia-opengl-medium-info (medium stream)
@@ -202,14 +202,14 @@
       (return-from medium-draw-text*))
     (let ((fixed-text (subseq text (or start 0) (or end (length text)))))
       (with-skia-canvas (medium)
-        (log:info "Drawing string ~s at (~s,~s)" fixed-text x y)
+        ;; (log:info "Drawing string ~s at (~s,~s)" fixed-text x y)
         (canvas::simple-text fixed-text x y :canvas (medium-skia-canvas medium)
                                             :paint (medium-skia-font-paint medium)
                                             :font (medium-skia-font medium))))))
 
 (defmethod medium-clear-area ((medium skia-opengl-medium) left top right bottom)
   (with-skia-canvas (medium)
-    (log:info "clear-area... ")
+    ;; (log:info "clear-area... ")
     (draw-rectangle* medium left top right bottom
                      :ink (compose-over (medium-background medium) +black+))))
 
@@ -220,7 +220,7 @@
 
 (defmethod medium-finish-output :before ((medium skia-opengl-medium))
   (alx:when-let ((mirror (medium-drawable medium)))
-    (log:info "FINISH OUTPUT")
+    ;; (log:info "FINISH OUTPUT")
     (with-skia-canvas (medium)
       (canvas::flush-canvas (medium-skia-canvas medium))
       (%swap-window-buffers medium))))
