@@ -184,8 +184,11 @@
 ;;; update the sheet transformation.
 (defmethod handle-sdl2-window-event ((key (eql :size-changed)) sheet stamp d1 d2)
   (log:info "Window size changed ~s ~s" d1 d2)
-  (make-instance 'window-configuration-event :sheet sheet :timestamp stamp
-                                             :width d1 :height d2))
+  (let ((window (sdl2-window (window-id (sheet-mirror sheet)))))
+    (multiple-value-bind (window-x window-y) (sdl2:get-window-position window)
+    (make-instance 'window-configuration-event :sheet sheet :timestamp stamp
+                                               :x window-x :y window-y
+                                               :width d1 :height d2))))
 
 ;;; Between pressing quit and the actual close the user may still use the
 ;;; window for a brief period, so i.e a window event may sneak in. The window
@@ -392,7 +395,6 @@
 (define-sdl2-handler (ev :touchfinger) (window-id timestamp x y which direction)
   (alx:when-let* ((mirror (id->mirror *sdl2-port* window-id))
                   (sheet (mirror-sheet mirror)))
-    ;; Uncomment to test, but it SPEWS!!
     ;; (log:info "EVT touchfinger: ev: ~a, wid: ~a ts: ~a, x: ~a, y: ~a, which: ~a direction: ~a"
     ;;           ev window-id timestamp x y which direction)
     ))
