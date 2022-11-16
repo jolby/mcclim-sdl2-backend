@@ -83,19 +83,20 @@
    ))
 
 (defparameter *last-char-txt* "")
+(defparameter *last-mouse-position-txt* "")
 
 (defun simple-draw (sheet)
   (let ((medium (sheet-medium sheet)))
     (with-bounding-rectangle* (x1 y1 x2 y2) sheet
-      (log:info "SIMPLE-DRAW current-thread: ~a" (bt:current-thread))
-      (log:info "bounding rect: x1: ~a, y1: ~a, x2: ~a, y2: ~a" x1 y1 x2 y2)
+      ;; (log:info "SIMPLE-DRAW current-thread: ~a" (bt:current-thread))
+      ;; (log:info "bounding rect: x1: ~a, y1: ~a, x2: ~a, y2: ~a" x1 y1 x2 y2)
       (medium-clear-area medium x1 y1 x2 y2)
       ;; Draw a Material-ish 'Card' inset from the window
       ;; region by 10px
       (let ((outer-card-path (skia-core::path-round-rectangle
                       (+ x1 10) (+ y1 10) 1060 700 5 5))
             (inner-card-path (skia-core::path-round-rectangle
-                              (+ x1 650) (+ y1 10) 400 650 5 5))
+                              (+ x1 550) (+ y1 10) 500 650 5 5))
             (shadow-paint (skia-core::make-paint :color #xffeeeeee
                                                  :anti-alias t)))
         (unwind-protect
@@ -107,7 +108,7 @@
                              :ink (alexandria:random-elt
                                    (make-contrasting-inks 8)))
                (draw-point* medium 100 100 :ink +black+ :line-thickness 8)
-               (draw-text* medium "(100,100)" 100 100
+               (draw-text* medium "(100,100)" 105 105
                            :text-style (make-text-style :sans-serif :roman 32)
                            :ink +red+)
                (draw-line* medium 50 50 500 500 :ink +red+ :line-thickness 4)
@@ -127,10 +128,13 @@
                            :text-style (make-text-style :sans-serif :roman 48))
                (draw-text* medium (format nil "Last key: ~a" *last-char-txt*) 750 120
                            :text-style (make-text-style :sans-serif :roman 32))
+               (draw-text* medium *last-mouse-position-txt* 650 220
+                           :text-style (make-text-style :sans-serif :roman 24))
                (medium-finish-output sheet))
 
-        (skia-core::destroy-paint shadow-paint)
-        (skia-core::destroy-path outer-card-path))))))
+          (skia-core::destroy-paint shadow-paint)
+          (skia-core::destroy-path outer-card-path)
+          (skia-core::destroy-path inner-card-path))))))
 
 ;;XXX REMEMBER: all drawing calls must be submitted to the main SDL
 ;;rendering thread. If not, you'll just get a black window.
@@ -179,8 +183,13 @@
   (setf (port-keyboard-input-focus (port sheet)) sheet)
   (setf (climi::port-focused-sheet (port sheet)) sheet))
 
+(defmethod handle-event ((sheet skia-app-sheet) (event clim:pointer-motion-event))
+  ;; (log:info "GOT EVENT: ~a" event)
+  (setf *last-mouse-position-txt* (format nil "Mouse Position: (~a,~a)" (pointer-event-x event) (pointer-event-y event)))
+  (handle-repaint sheet +everywhere+))
+
 (defmethod handle-repaint ((sheet skia-app-sheet) region)
-  (log:warn "Repainting a window (region ~s)." region)
+  ;; (log:warn "Repainting a window (region ~s)." region)
   (simple-draw sheet))
 
 
