@@ -157,6 +157,8 @@
            (cond
              ((null *multiprocessing-p*)
               (handle-sdl2-event ,event-type ,user-data-no-sync))
+             ((in-sdl2-main-thread-p)
+              (handle-sdl2-event ,event-type ,user-data-no-sync))
              ((null ,sync)
               (sdl2:push-user-event ,event-type ,user-data-no-sync)
               nil)

@@ -35,6 +35,13 @@
 ;;; clim-agnostic handlers.
 (defvar *sdl2-port*)
 
+(defvar *sdl2-thread-name* "MAIN-CLIM-SDL2-LOOP")
+
+(defvar *sdl2-main-thread* nil)
+
+(defun in-sdl2-main-thread-p ()
+  (not (null *sdl2-main-thread*)))
+
 (defun id->mirror (port window-id)
   (gethash window-id (slot-value port 'id->mirror)))
 
@@ -89,13 +96,13 @@
         :do (setf (name->cursor port cursor-name) (%create-sdl2-cursor cursor-name))))
 
 (defun %destroy-sdl2-cursors (port)
-  (loop :for table := (slot-value port 'name->cursor)
-        :for cursor-name being the hash-keys of table
+  (let ((table (slot-value port 'name->cursor)))
+    (loop
+      :for cursor-name being the hash-keys of table
         :using (hash-value sdl2-cursor)
-        :do (progn
-              (remhash cursor-name table)
-              (%destroy-sdl2-cursor sdl2-cursor))))
-
+      :do (progn
+            (remhash cursor-name table)
+            (%destroy-sdl2-cursor sdl2-cursor)))))
 
 (defmethod pointer-position ((pointer sdl2-pointer))
   (values (slot-value pointer 'x) (slot-value pointer 'y)))
@@ -136,13 +143,18 @@
 
 (defmethod destroy-port ((port sdl2-port))
   ;; Close the SDL2 loop only after the last port is destroyed.
+  (log:info "Destroying port: ~a" port)
   (when (member port (sdl2-clients port))
     (clim-sys:with-lock-held ((main-thread-lock port))
       (alx:removef (sdl2-clients port) port)
       (%destroy-sdl2-cursors port)
       (when (null (sdl2-clients port))
+        (log:info "Destroyed the last sdl2 port. Shutting down sdl2 library")
         (%quit-port port)))))
 
+(defun %destroy-all-sdl2-ports (&key (port-type :sdl2))
+  (loop :for client :in (sdl2-clients (find-port :server-path port-type))
+        :do (destroy-port client)))
 
 ;; (defmethod pointer-button-state ((pointer sdl-pointer))
 ;;   nil)
@@ -198,7 +210,7 @@
   (if *multiprocessing-p*
       (unless (main-thread port)
         (setf (main-thread port)
-              (clim-sys:make-process (alx:curry #'%loop-port port) :name "MAIN-CLIM-SDL2-LOOP"))
+              (clim-sys:make-process (alx:curry #'%loop-port port) :name *sdl2-thread-name*))
         (loop until *initialized-p*
               do (clim-sys:with-lock-held (*initialized-lock*)
                    (clim-sys:condition-wait *initialized-cv* *initialized-lock*))))
@@ -225,9 +237,10 @@
                         (lambda (c)
                           (log:error "Ignoring the error ~s" c)
                           (invoke-restart (find-restart 'ignore c)))))
-         (loop
-           (with-simple-restart (ignore "Ignore error and continue.")
-             (process-next-event port))))
+         (let ((*sdl2-main-thread* (bt:current-thread)))
+           (loop
+             (with-simple-restart (ignore "Ignore error and continue.")
+               (process-next-event port)))))
     (%quit-sdl2)))
 
 
