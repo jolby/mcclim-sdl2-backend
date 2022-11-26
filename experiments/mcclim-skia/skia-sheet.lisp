@@ -250,5 +250,8 @@
   (sheet-direct-mirror *skia-sheet*)
   (close-skia-sheet *skia-sheet*)
   (nuke-state)
-  (destroy-port (find-port :server-path :sdl2-ttf-skia))
+  (destroy-port (find-port :server-path :sdl2-skia-ttf))
+
+
+  (when-let ((mirror (sheet-direct-mirror sheet))) (call-next-method) (setf (%sheet-direct-mirror sheet) nil))
 )

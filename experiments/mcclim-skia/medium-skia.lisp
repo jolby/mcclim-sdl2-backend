@@ -1,6 +1,6 @@
 (in-package #:mcclim-skia)
 
-(defmethod make-medium ((port mcclim-sdl2::sdl2-port) (sheet sdl2-skia-top-level-sheet))
+(defmethod make-medium ((port sdl2-skia-port) sheet)
   (make-instance 'skia-opengl-medium :port port :skia-canvas nil))
 
 (defun %medium-mirror (medium)
@@ -96,9 +96,11 @@
       (%update-dash-pattern medium (line-style-dashes new-value)))))
 
 (defun %font-file-path-from-text-style (text-style)
-  (multiple-value-bind (family face size)
+  (multiple-value-bind (family face size) ;;:sans-serif/:roman
       (text-style-components text-style)
-    (alx:assoc-value mcclim-truetype::*families/faces* (list family face) :test #'equal)))
+    (alx:assoc-value mcclim-truetype::*families/faces*
+                     (list (or family :sans-serif) (or face :roman))
+                     :test #'equal)))
 
 (defun %load-skia-typeface (font-path)
   (unless (uiop/filesystem:file-exists-p font-path)
@@ -218,17 +220,34 @@
     (sdl2::gl-swap-window
      (mcclim-sdl2::sdl2-window (mcclim-sdl2::window-id mirror)))))
 
-(defmethod medium-finish-output :before ((medium skia-opengl-medium))
+(mcclim-sdl2::define-sdl2-request do-finish-output (medium)
   (alx:when-let ((mirror (medium-drawable medium)))
-    ;; (log:info "FINISH OUTPUT")
+    (log:info "FINISH OUTPUT mirror: ~a. Current thread: ~a" mirror (bt:current-thread))
     (with-skia-canvas (medium)
       (canvas::flush-canvas (medium-skia-canvas medium))
       (%swap-window-buffers medium))))
 
+(defmethod medium-finish-output :before ((medium skia-opengl-medium))
+  (log:info "FINISH OUTPUT medium: ~a. Current thread: ~a" medium (bt:current-thread))
+  ;; (alx:when-let ((mirror (medium-drawable medium)))
+  ;;   (log:info "FINISH OUTPUT mirror: ~a. Current thread: ~a" mirror (bt:current-thread))
+  ;;   (with-skia-canvas (medium)
+  ;;     (canvas::flush-canvas (medium-skia-canvas medium))
+  ;;     (%swap-window-buffers medium)))
+  (do-finish-output medium :synchronize t)
+
+  )
+
+(mcclim-sdl2::define-sdl2-request do-force-output (medium)
+  (alx:when-let ((mirror (medium-drawable medium)))
+    (log:info "DO FORCE OUTPUT. current-thread: ~a" (bt:current-thread))
+    (sdl2::gl-swap-window
+     (mcclim-sdl2::sdl2-window (mcclim-sdl2::window-id mirror)))))
+
 (defmethod medium-force-output :before ((medium skia-opengl-medium))
   ;; (break)
-  (log:info "FORCE OUTPUT. ")
-  ;; (do-mirror-force-output medium mirror)
+  (log:info "FORCE OUTPUT. ~a, THREAD: ~a" medium (bt:current-thread))
+  (do-force-output medium :synchronize t)
 
   ;; This is called immediately after finish-output
   ;; in an unwind-protect (invoke-with-output-buffered) Core/drawing/medium.lisp
@@ -238,7 +257,9 @@
   ;; in the command queue. This resulted in no actual drawing commands being
   ;; queued to opengl, and then when calling swap-windows it presented a black
   ;; screen.
-  (alx:when-let ((mirror (medium-drawable medium)))
-    (log:info "FORCE OUTPUT. gl-swap-window...")
-    (sdl2::gl-swap-window
-     (mcclim-sdl2::sdl2-window (mcclim-sdl2::window-id mirror)))))
+
+  ;; (alx:when-let ((mirror (medium-drawable medium)))
+  ;;   (log:info "FORCE OUTPUT. current-thread: ~a" (bt:current-thread))
+  ;;   (sdl2::gl-swap-window
+  ;;    (mcclim-sdl2::sdl2-window (mcclim-sdl2::window-id mirror))))
+  )

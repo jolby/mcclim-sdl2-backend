@@ -31,28 +31,39 @@
     (%destroy-sdl2-opengl-skia-mirror mirror))
 
 (mcclim-sdl2::define-sdl2-request destroy-skia-window (sheet)
-  (log:info "BEGIN destroy-skia-window: mirror: ~a, sheet: ~a" (sheet-direct-mirror sheet) sheet)
-  (alx:when-let ((mirror (sheet-direct-mirror sheet)))
-    ;; (break)
-    (%destroy-sdl2-opengl-skia-mirror mirror)
+  (log:info "BEGIN TRY destroy-skia-window: sheet: ~a, current thread: ~a"
+            sheet (bt:current-thread))
+
+  (alx:if-let ((mirror (sheet-mirror sheet)))
+    (progn
+      (log:info "BEGIN DO destroy-skia-window: mirror: ~a, sheet: ~a" mirror sheet)
+      (%destroy-sdl2-opengl-skia-mirror mirror))
+    (progn
+      (log:warn "No mirror available for sheet: ~a!" sheet)
+      (break))
     ))
 
+(defvar *last-mirrored-sheet* nil)
 
-(defmethod realize-mirror ((port mcclim-sdl2::sdl2-port) (sheet sdl2-skia-top-level-sheet))
+(defmethod realize-mirror ((port sdl2-skia-port) (sheet top-level-sheet-mixin))
   (with-bounding-rectangle* (x y :width w :height h) sheet
-    (log:info "REALIZE: w: ~a, h: ~a sheet: ~a" w h sheet)
     (let* ((mirror (create-skia-mirror-for-sheet sheet :synchronize t))
-          (id (sdl2-ffi.functions:sdl-get-window-id (window mirror)))
-          (native-region (make-rectangle* 0 0 w h))
-          (native-transformation (make-translation-transformation (- x) (- y))))
+           (id (sdl2-ffi.functions:sdl-get-window-id (window mirror)))
+           (native-region (make-rectangle* 0 0 w h))
+           (native-transformation (make-translation-transformation (- x) (- y))))
       (alx:when-let ((icon (sheet-icon sheet)))
         (mcclim-sdl2::change-window-icon id (alx:ensure-car icon)))
       (setf (climi::%sheet-native-region sheet) native-region
             (climi::%sheet-native-transformation sheet) native-transformation
-            (mcclim-sdl2::id->mirror port id) mirror))))
+            (mcclim-sdl2::id->mirror port id) mirror
+            ;;XXX check if mirrored-sheet first?
+            (climi::%sheet-direct-mirror sheet) mirror)
+      (log:info "REALIZE: w: ~a, h: ~a win-id: ~a, sheet: ~a, mirror: ~a" w h id sheet mirror)
+      (setf *last-mirrored-sheet* sheet)
+      mirror)))
 
-(defmethod destroy-mirror ((port mcclim-sdl2::sdl2-port) (sheet sdl2-skia-top-level-sheet))
-  (destroy-skia-window sheet))
+(defmethod destroy-mirror ((port sdl2-skia-port) (sheet top-level-sheet-mixin))
+  (destroy-skia-window sheet :synchronize t))
 
-(defmethod destroy-mirror ((port mcclim-sdl2::sdl2-port) (mirror sdl2-opengl-skia-mirror))
-  (destroy-skia-mirror mirror))
+(defmethod destroy-mirror ((port sdl2-skia-port) (mirror sdl2-opengl-skia-mirror))
+  (destroy-skia-mirror mirror :synchronize t))
