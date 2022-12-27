@@ -1,0 +1,13 @@
+* This is an attempt to provide more structure to the CLIM application loop
+** Resources
+- jackdaniel's GTK frame clock doc
+*** Timer wheels
+- https://www.snellman.net/blog/archive/2016-07-27-ratas-hierarchical-timer-wheel/
+** Concepts
+*** Cyclical Loop with discrete processing steps
+*** Each loop epoch has a time budget
+*** Every loop processing step also has a time budget
+** Features
+*** Instrumentation from the beginning.
+**** Log times, collect aggregate stats
+**** Log anomolous events, steps that go over time budget
