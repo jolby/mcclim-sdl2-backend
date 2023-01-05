@@ -171,25 +171,53 @@
     `(let ((canvas::*canvas* (%lookup-skia-canvas ,medium)))
        (progn ,@body))))
 
-(defmethod medium-draw-line* ((medium skia-opengl-medium) x1 y1 x2 y2)
+
+(mcclim-sdl2::define-sdl2-request do-draw-line (medium x1 y1 x2 y2)
   (with-skia-canvas (medium)
     (canvas::line x1 y1 x2 y2
                   :canvas (medium-skia-canvas medium)
                   :paint (medium-skia-paint medium))))
 
-(defmethod medium-draw-polygon* ((medium skia-opengl-medium) coord-seq closed filled)
+(defmethod medium-draw-line* ((medium skia-opengl-medium) x1 y1 x2 y2)
+  ;; (with-skia-canvas (medium)
+  ;;   (canvas::line x1 y1 x2 y2
+  ;;                 :canvas (medium-skia-canvas medium)
+  ;;                 :paint (medium-skia-paint medium)))
+
+  (do-draw-line medium x1 y1 x2 y2  :synchronize t)
+  )
+
+(mcclim-sdl2::define-sdl2-request do-draw-polygon (medium coord-seq closed filled)
   (with-skia-canvas (medium)
     (canvas::polygon coord-seq :closed closed :filled filled
                                :canvas (medium-skia-canvas medium)
                                :paint (medium-skia-paint medium))))
 
-(defmethod medium-draw-rectangle* ((medium basic-medium) x1 y1 x2 y2 filled)
+(defmethod medium-draw-polygon* ((medium skia-opengl-medium) coord-seq closed filled)
+  ;; (with-skia-canvas (medium)
+  ;;   (canvas::polygon coord-seq :closed closed :filled filled
+  ;;                              :canvas (medium-skia-canvas medium)
+  ;;                              :paint (medium-skia-paint medium)))
+  (do-draw-polygon medium coord-seq closed filled  :synchronize t)
+  )
+
+(mcclim-sdl2::define-sdl2-request do-draw-rectangle (medium x1 y1 x2 y2 filled)
   (let ((width (abs (- x2 x1)))
         (height (abs (- y2 y1))))
     (with-skia-canvas (medium)
       (canvas::rectangle x1 y1 width height
                          :canvas (medium-skia-canvas medium)
                          :paint (medium-skia-paint medium)))))
+
+(defmethod medium-draw-rectangle* ((medium basic-medium) x1 y1 x2 y2 filled)
+  ;; (let ((width (abs (- x2 x1)))
+  ;;       (height (abs (- y2 y1))))
+  ;;   (with-skia-canvas (medium)
+  ;;     (canvas::rectangle x1 y1 width height
+  ;;                        :canvas (medium-skia-canvas medium)
+  ;;                        :paint (medium-skia-paint medium))))
+  (do-draw-rectangle medium x1 y1 x2 y2 filled  :synchronize t)
+  )
 
 ;; (defmethod medium-draw-circle* ((medium basic-medium) cx cy radius eta1 eta2 filled)
 ;;   )
@@ -209,11 +237,20 @@
                                             :paint (medium-skia-font-paint medium)
                                             :font (medium-skia-font medium))))))
 
-(defmethod medium-clear-area ((medium skia-opengl-medium) left top right bottom)
+(mcclim-sdl2::define-sdl2-request do-clear-area (medium left top right bottom)
   (with-skia-canvas (medium)
-    ;; (log:info "clear-area... ")
+    (log:info "clear-area ~a left: ~a top: ~a right: ~a bottom: ~a" (bt:current-thread) left top right bottom)
     (draw-rectangle* medium left top right bottom
                      :ink (compose-over (medium-background medium) +black+))))
+
+
+(defmethod medium-clear-area ((medium skia-opengl-medium) left top right bottom)
+  ;; (with-skia-canvas (medium)
+  ;;   (log:info "clear-area ~a left: ~a top: ~a right: ~a bottom: ~a" (bt:current-thread) left top right bottom)
+  ;;   (draw-rectangle* medium left top right bottom
+  ;;                    :ink (compose-over (medium-background medium) +black+)))
+  (do-clear-area medium left top right bottom :synchronize t)
+  )
 
 (defun %swap-window-buffers (medium)
   (alx:when-let ((mirror (medium-drawable medium)))
@@ -222,13 +259,15 @@
 
 (mcclim-sdl2::define-sdl2-request do-finish-output (medium)
   (alx:when-let ((mirror (medium-drawable medium)))
-    (log:info "FINISH OUTPUT mirror: ~a. Current thread: ~a" mirror (bt:current-thread))
+    ;; (log:info "DO FINISH OUTPUT mirror: ~a. Canvas: ~a. Current thread: ~a" mirror (medium-skia-canvas medium) (bt:current-thread))
     (with-skia-canvas (medium)
       (canvas::flush-canvas (medium-skia-canvas medium))
-      (%swap-window-buffers medium))))
+      ;; (%swap-window-buffers medium)
+      ;; (sleep 0.1)
+      )))
 
 (defmethod medium-finish-output :before ((medium skia-opengl-medium))
-  (log:info "FINISH OUTPUT medium: ~a. Current thread: ~a" medium (bt:current-thread))
+  ;; (log:info "FINISH OUTPUT medium: ~a. Current thread: ~a" medium (bt:current-thread))
   ;; (alx:when-let ((mirror (medium-drawable medium)))
   ;;   (log:info "FINISH OUTPUT mirror: ~a. Current thread: ~a" mirror (bt:current-thread))
   ;;   (with-skia-canvas (medium)
@@ -241,12 +280,11 @@
 (mcclim-sdl2::define-sdl2-request do-force-output (medium)
   (alx:when-let ((mirror (medium-drawable medium)))
     (log:info "DO FORCE OUTPUT. current-thread: ~a" (bt:current-thread))
-    (sdl2::gl-swap-window
-     (mcclim-sdl2::sdl2-window (mcclim-sdl2::window-id mirror)))))
+    (%swap-window-buffers medium)))
 
 (defmethod medium-force-output :before ((medium skia-opengl-medium))
   ;; (break)
-  (log:info "FORCE OUTPUT. ~a, THREAD: ~a" medium (bt:current-thread))
+  ;; (log:info "FORCE OUTPUT. ~a, THREAD: ~a" medium (bt:current-thread))
   (do-force-output medium :synchronize t)
 
   ;; This is called immediately after finish-output

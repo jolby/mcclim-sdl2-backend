@@ -36,3 +36,5 @@ https://gamedev.stackexchange.com/questions/189987/how-to-process-events-as-well
 *** Skia Orientation
 From SkM44 docs:
 Skia assumes a right-handed coordinate system: +X goes to the right +Y goes down +Z goes into the screen (away from the viewer)
+* Redraw queue mini-project
+** We need to ensure all drawing ops are done on the Main/RenderingThread
