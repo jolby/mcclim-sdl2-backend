@@ -9,16 +9,14 @@
 
 (defun %init-domain-counters (allowed-domains counter-ht)
   (loop :for domain-key :in allowed-domains
-        :do (setf (gethash domain-key counter-ht (stmx.lang:make-atomic-counter))))
+        :do (setf (gethash domain-key counter-ht) (stmx.lang:make-atomic-counter))))
 
 (defmethod initialize-instance :after ((domain-counter basic-atomic-domain-counter) &key allowed-domains)
   (unless (and allowed-domains
                (> (length allowed-domains) 0)
                (every #'keywordp allowed-domains))
     (error "allowed-domains param must be a non-null sequence of keywords."))
-  (%init-domain-counters allowed-domains (domain->counter domain-counter))
-  (loop :for domain-key :in allowed-domains
-        :do (setf (gethash domain-key (domain->counter domain-counter)) (stmx.lang:make-atomic-counter))))
+  (%init-domain-counters allowed-domains (domain->counter domain-counter)))
 
 (defun domain-counter-incf (domain-key &key domain-counter (delta 1))
   (let ((counter (or domain-counter *domain-counter*)))
@@ -53,6 +51,26 @@
                (domain->counter counter))
       counter-alist)))
 
+(defun domain-counter-reset (domain-key &key domain-counter)
+  (let ((domain-counter (or domain-counter *domain-counter*)))
+    (unless domain-counter
+      (error "No provided :domain-counter keyword arg, nor is the *domain-counter* special set"))
+    (check-type domain-key keyword)
+    (check-type domain-counter basic-atomic-domain-counter)
+    (multiple-value-bind (atomic-counter found-p) (gethash domain-key (domain->counter domain-counter))
+      (declare (ignore atomic-counter))
+      (unless found-p (error (format nil "Unknown domain: ~a. Domain must be one of: ~a"
+                                     domain-key (allowed-domains domain-counter))))
+      ;;XXX - race condition - need either write lock/double check or stmx transactional exchange
+      (setf (gethash domain-key (domain->counter domain-counter)) (stmx.lang:make-atomic-counter)))))
 
-(defun domain-counter-reset (domain-key &key counter))
-(defun domain-counter-reset-all (&key counter))
+(defun domain-counter-reset-all (&key domain-counter)
+    (let* ((domain-counter (or domain-counter *domain-counter*))
+           (allowed-domains (allowed-domains domain-counter))
+           (new-counter-ht (make-hash-table :test 'eq)))
+    (unless domain-counter
+      (error "No provided :domain-counter keyword arg, nor is the *domain-counter* special set"))
+      (check-type domain-counter basic-atomic-domain-counter)
+      (%init-domain-counters allowed-domains new-counter-ht)
+      ;; XXX -- race condition
+      (setf (slot-value domain-counter '%domain->counter) new-counter-ht)))
