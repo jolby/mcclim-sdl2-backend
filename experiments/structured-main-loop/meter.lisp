@@ -23,10 +23,11 @@
 ;;; This is the base class of all meters.
 
 (defclass meter ()
-  ((%name :initform "Unnamed" :initarg :name :reader name)))
+  ((%name :initform "Unnamed" :initarg :name :reader name)
+   (%invocation-count :initform 0 :accessor invocation-count)))
 
 (defmethod reset progn ((meter meter))
-  nil)
+  (setf (invocation-count meter) 0))
 
 (defmethod stream-report progn ((meter meter) stream)
   (format stream "Report for meter named ~a~%" (name meter)))
@@ -36,36 +37,35 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
-;;; Class BASIC-METER.
+;;; Class CPU-TIME-METER.
 ;;;
 ;;; A meter class that counts the number of invocations and measures
 ;;; the total CPU time for the invocations.
 
-(defclass basic-meter (meter)
+(defclass cpu-time-meter (meter)
   ((%sum-cpu-time :initform 0 :accessor sum-cpu-time)
    (%sum-squared-cpu-time :initform 0 :accessor sum-squared-cpu-time)
    (%min-cpu-time :initform 0 :accessor min-cpu-time)
    (%max-cpu-time :initform 0 :accessor max-cpu-time)
-   (%invocation-count :initform 0 :accessor invocation-count)))
+   ))
 
-(defun register-one-invocation (basic-meter cpu-time)
-  (incf (invocation-count basic-meter))
-  (incf (sum-cpu-time basic-meter) cpu-time)
-  (incf (sum-squared-cpu-time basic-meter) (* cpu-time cpu-time))
-  (if (= (invocation-count basic-meter) 1)
-      (progn (setf (min-cpu-time basic-meter) cpu-time)
-	     (setf (max-cpu-time basic-meter) cpu-time))
-      (progn (setf (min-cpu-time basic-meter)
-		   (min (min-cpu-time basic-meter) cpu-time))
-	     (setf (max-cpu-time basic-meter)
-		   (max (max-cpu-time basic-meter) cpu-time)))))
+(defun register-one-invocation (cpu-time-meter cpu-time)
+  (incf (invocation-count cpu-time-meter))
+  (incf (sum-cpu-time cpu-time-meter) cpu-time)
+  (incf (sum-squared-cpu-time cpu-time-meter) (* cpu-time cpu-time))
+  (if (= (invocation-count cpu-time-meter) 1)
+      (progn (setf (min-cpu-time cpu-time-meter) cpu-time)
+	     (setf (max-cpu-time cpu-time-meter) cpu-time))
+      (progn (setf (min-cpu-time cpu-time-meter)
+		   (min (min-cpu-time cpu-time-meter) cpu-time))
+	     (setf (max-cpu-time cpu-time-meter)
+		   (max (max-cpu-time cpu-time-meter) cpu-time)))))
 
-(defmethod reset progn ((meter basic-meter))
+(defmethod reset progn ((meter cpu-time-meter))
   (setf (sum-cpu-time meter) 0)
-  (setf (sum-squared-cpu-time meter) 0)
-  (setf (invocation-count meter) 0))
+  (setf (sum-squared-cpu-time meter) 0))
 
-(defmethod stream-report progn ((meter basic-meter) stream)
+(defmethod stream-report progn ((meter cpu-time-meter) stream)
   (with-accessors ((invocation-count invocation-count)
 		   (sum-cpu-time sum-cpu-time)
 		   (sum-squared-cpu-time sum-squared-cpu-time)
@@ -99,7 +99,7 @@
 			  invocation-count))
 		 internal-time-units-per-second)))))
 
-(defmethod invoke-with-meter :around ((meter basic-meter) function)
+(defmethod invoke-with-meter :around ((meter cpu-time-meter) function)
   (declare (ignorable function))
   (let ((time (get-internal-run-time)))
     (multiple-value-prog1
@@ -110,12 +110,10 @@
 ;;;
 ;;; Class SIZE-METER.
 ;;;
-;;; A meter class that, in addition to counting the number of
-;;; invocations and measuring the total CPU time for the invocations
-;;; also allows client code to supply a SIZE for each invocation.  We
-;;; do this by defining a generic function INCREMENT-SIZE.
+;;; A meter class that allows client code to supply a SIZE for each invocation.
+;;; We do this by defining a generic function INCREMENT-SIZE.
 
-(defclass size-meter (basic-meter)
+(defclass size-meter (meter)
   ((%sum-size :initform 0 :accessor sum-size)
    (%sum-squared-size :initform 0 :accessor sum-squared-size)
    (%min-size :initform 0 :accessor min-size)

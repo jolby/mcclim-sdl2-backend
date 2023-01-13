@@ -19,11 +19,11 @@
       (execute-task timer))))
 
 (defmethod time-to-execute-p ((timer timer))
-                                        ; Check if it is time to execute the task for the timer
+  ;; Check if it is time to execute the task for the timer
   )
 
 (defmethod execute-task ((timer timer))
-                                        ; Execute the task for the timer
+  ;; Execute the task for the timer
   )
 
 (defmethod add-timer ((scheduler scheduler) (timer timer))

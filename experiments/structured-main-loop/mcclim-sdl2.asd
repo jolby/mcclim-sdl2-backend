@@ -4,7 +4,8 @@
   :author "Daniel Kochmański"
   :description "SDL2 backend"
   :depends-on ("mcclim" "sdl2" "log4cl"
-                        "lparallel" "trivial-main-thread" "cl-muth" "stmx"
+                        #+sbcl "sb-concurrency"
+                        "lparallel" "trivial-main-thread" "cl-muth" "stmx" "timer-wheel"
                         "journal" "nhooks")
   :serial t
   :components ((:file "packages")
@@ -13,6 +14,7 @@
                (:file "utilities")      ; sdl2 glue
                (:file "resources")      ; sdl2 memory
                ;; (file  "original-sdl-loop") ;jackdaniel's original inner loop logic
+               (:file "time-utilities")
                (:file "scheduler")
                (:file "structured-main-loop") ;experimental frame-clock loop
                (:file "port")           ; sdl2 <-> clim
@@ -21,3 +23,4 @@
                (:file "window")         ; mirrors
                (:file "plain-sheet")))  ; testing
 
+;; (asdf:load-system :mcclim-sdl2 :force t)

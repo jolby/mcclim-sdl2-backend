@@ -27,3 +27,5 @@
 
 (defun now-as-float-seconds ()
   (/ (float (get-internal-real-time)) internal-time-units-per-second))
+
+(log:info "time-utilities loaded!")
